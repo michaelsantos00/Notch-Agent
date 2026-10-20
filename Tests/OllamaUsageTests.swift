@@ -94,6 +94,51 @@ final class OllamaUsageTests: XCTestCase {
         XCTAssertNil(session?.resetsAt)
     }
 
+    // MARK: - Request-count shape (October 2026)
+
+    /// The shape `GET /api/usage?range=30d` answers with since Ollama dropped
+    /// plan fractions: request counts only, in day buckets, the last partial.
+    /// Trimmed to the final eight days; the totals cover all thirty.
+    private let countsResponse = """
+    {"range":"30d","scope":"self","granularity":"day",
+     "from":"2026-09-20T00:00:00Z","until":"2026-10-20T14:55:56.558932752Z",
+     "totals":{"request_count":37120},
+     "buckets":[
+      {"from":"2026-10-13T00:00:00Z","until":"2026-10-14T00:00:00Z","request_count":919},
+      {"from":"2026-10-14T00:00:00Z","until":"2026-10-15T00:00:00Z","request_count":371},
+      {"from":"2026-10-15T00:00:00Z","until":"2026-10-16T00:00:00Z","request_count":36},
+      {"from":"2026-10-16T00:00:00Z","until":"2026-10-17T00:00:00Z","request_count":14},
+      {"from":"2026-10-17T00:00:00Z","until":"2026-10-18T00:00:00Z","request_count":232},
+      {"from":"2026-10-18T00:00:00Z","until":"2026-10-19T00:00:00Z","request_count":165},
+      {"from":"2026-10-19T00:00:00Z","until":"2026-10-20T00:00:00Z","request_count":71},
+      {"from":"2026-10-20T00:00:00Z","until":"2026-10-20T14:55:56.558932752Z","partial":true,"request_count":32}
+     ]}
+    """
+
+    func testCountsShapeReadsTodaySevenDaysAndThirty() throws {
+        let result = try OllamaUsage.parse(countsResponse)
+        XCTAssertEqual(result.windows.map(\.id), ["today", "week", "month"])
+        XCTAssertEqual(result.windows.first { $0.id == "today" }?.used, 32)
+        // The last seven buckets, today's partial one included.
+        XCTAssertEqual(result.windows.first { $0.id == "week" }?.used, 371 + 36 + 14 + 232 + 165 + 71 + 32)
+        XCTAssertEqual(result.windows.first { $0.id == "month" }?.used, 37120)
+    }
+
+    func testCountsShapeClaimsNoFractionItDoesNotHave() throws {
+        let result = try OllamaUsage.parse(countsResponse)
+        XCTAssertEqual(result.headlineID, "today")
+        XCTAssertTrue(result.windows.allSatisfy { $0.usedFraction == nil })
+    }
+
+    func testCountsShapeWithNoRequestsIsStillAReading() throws {
+        let quiet = """
+        {"range":"30d","totals":{"request_count":0},
+         "buckets":[{"from":"2026-10-20T00:00:00Z","until":"2026-10-20T09:00:00Z","partial":true,"request_count":0}]}
+        """
+        let result = try OllamaUsage.parse(quiet)
+        XCTAssertEqual(result.windows.first { $0.id == "month" }?.used, 0)
+    }
+
     // MARK: - Edge cases
 
     func testEmptyUsageThrowsNothingMetered() {

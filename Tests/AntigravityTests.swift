@@ -92,6 +92,35 @@ final class AntigravityCredentialsTests: XCTestCase {
         XCTAssertEqual(creds.authMethod, "consumer")
         XCTAssertFalse(creds.isExpired)
     }
+
+    /// The app and the CLI each keep a token file of the same format, and only
+    /// the one that ran last is fresh: the app writes
+    /// `jetski-standalone-oauth-token`, which went unread, so the reading
+    /// stopped the moment the app quit even with an hour of token left.
+    func testPrefersTheFresherOfTheCLIAndAppTokenFiles() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        func write(_ name: String, token: String, expiry: String) throws -> String {
+            let file = tempDir.appendingPathComponent(name)
+            try """
+            {"token":{"access_token":"\(token)","token_type":"Bearer","expiry":"\(expiry)"},"auth_method":"consumer"}
+            """.write(to: file, atomically: true, encoding: .utf8)
+            return file.path
+        }
+        let cli = try write("antigravity-oauth-token", token: "cli", expiry: "2026-10-16T11:47:37.985705-04:00")
+        let app = try write("jetski-standalone-oauth-token", token: "app", expiry: "2126-10-20T11:53:00.000000-04:00")
+        let missing = tempDir.appendingPathComponent("absent").path
+
+        let creds = try XCTUnwrap(AntigravityCredentials.readTokenFiles(at: [cli, missing, app]))
+        XCTAssertEqual(creds.accessToken, "app")
+    }
+
+    func testTheAppTokenFileIsAmongThoseRead() {
+        XCTAssertTrue(AntigravityCredentials.tokenFilePaths.contains {
+            $0.hasSuffix("/.gemini/jetski-standalone-oauth-token")
+        })
+    }
 }
 
 final class AntigravityTierTests: XCTestCase {
@@ -1695,25 +1724,78 @@ final class AntigravitySourceOrderTests: XCTestCase {
     }
 
     /// Once the server has answered, its going away means Antigravity was
-    /// closed — keep the last reading dated rather than going back to the
-    /// keychain for a number the token cannot produce anyway.
-    func testOnceBridgedItDoesNotFallBackToTheToken() async throws {
+    /// closed — and quota is only spent while it runs, so the last reading is
+    /// still the reading. It is carried forward, marked as ours.
+    func testOnceBridgedItCarriesTheLastReadingForward() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
         let answers = Answers([[LimitWindow(id: "gemini-weekly", label: "Weekly", usedFraction: 0.2)], nil])
         let provider = AntigravityProvider(session: GoogleStub.session(),
-                                           localQuota: { answers.next() })
+                                           localQuota: { answers.next() },
+                                           defaults: defaults)
 
         _ = try await provider.fetchSnapshot()
         GoogleStub.reset()
+        let snapshot = try await provider.fetchSnapshot()
 
-        do {
-            _ = try await provider.fetchSnapshot()
-            XCTFail("expected credentialExpired")
-        } catch UsageProviderError.credentialExpired {
-            XCTAssertEqual(GoogleStub.requestCount, 0,
-                           "it went back to the token after the bridge had answered once")
-        } catch {
-            XCTFail("expected credentialExpired, got \(error)")
-        }
+        XCTAssertEqual(snapshot.windows.map(\.id), ["gemini-weekly"])
+        XCTAssertEqual(snapshot.windows.first?.usedFraction, 0.2)
+        XCTAssertEqual(snapshot.fidelity, .derived)
+        XCTAssertEqual(GoogleStub.requestCount, 0,
+                       "it went back to the token after the bridge had answered once")
+    }
+
+    /// Relaunching NotchAgent while Antigravity is closed used to lose the
+    /// percentage and fall back to counting requests.
+    func testTheLastReadingSurvivesARelaunch() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        let windows = [LimitWindow(id: "gemini-weekly", label: "Weekly", usedFraction: 0.4)]
+        _ = try await AntigravityProvider(session: GoogleStub.session(),
+                                          localQuota: { windows },
+                                          defaults: defaults).fetchSnapshot()
+
+        let relaunched = AntigravityProvider(session: GoogleStub.session(),
+                                             localQuota: { nil },
+                                             defaults: defaults)
+        let snapshot = try await relaunched.fetchSnapshot()
+
+        XCTAssertEqual(snapshot.windows.first?.usedFraction, 0.4)
+        XCTAssertEqual(snapshot.fidelity, .derived)
+    }
+}
+
+/// What a remembered reading becomes once time has passed: a window whose
+/// reset has gone by is empty again, and its next reset is a cycle on.
+final class AntigravityCarryForwardTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testAWindowPastItsResetIsEmptyAgainWithTheNextReset() throws {
+        let fiveHours: TimeInterval = 5 * 3600
+        let window = LimitWindow(id: "gemini-5h", label: "5-hour", usedFraction: 0.7,
+                                 resetsAt: now.addingTimeInterval(-fiveHours - 60),
+                                 duration: fiveHours)
+
+        let carried = try XCTUnwrap(AntigravityProvider.carriedForward([window], now: now).first)
+
+        XCTAssertEqual(carried.usedFraction, 0)
+        XCTAssertEqual(carried.resetsAt, now.addingTimeInterval(fiveHours - 60),
+                       "two cycles on from the stale reset, the first one still ahead")
+        XCTAssertEqual(carried.label, "5-hour")
+        XCTAssertEqual(carried.duration, fiveHours)
+    }
+
+    func testAWindowStillRunningIsLeftAlone() {
+        let window = LimitWindow(id: "gemini-weekly", label: "Weekly", usedFraction: 0.3,
+                                 resetsAt: now.addingTimeInterval(3600), duration: 7 * 86400)
+        XCTAssertEqual(AntigravityProvider.carriedForward([window], now: now), [window])
+    }
+
+    /// No cycle length means no honest next reset — empty, with the date unknown.
+    func testAResetWithNoCycleLengthLeavesTheNextOneUnknown() throws {
+        let window = LimitWindow(id: "x", label: "X", usedFraction: 0.5,
+                                 resetsAt: now.addingTimeInterval(-60))
+        let carried = try XCTUnwrap(AntigravityProvider.carriedForward([window], now: now).first)
+        XCTAssertEqual(carried.usedFraction, 0)
+        XCTAssertNil(carried.resetsAt)
     }
 }
 

@@ -93,10 +93,17 @@ struct AntigravityCredentials {
         if FileManager.default.fileExists(atPath: jsonPath) { return true }
         let ompDBPath = ("~/.omp/agent/agent.db" as NSString).expandingTildeInPath
         if FileManager.default.fileExists(atPath: ompDBPath) { return true }
-        let cliTokenPath = ("~/.gemini/antigravity-cli/antigravity-oauth-token" as NSString).expandingTildeInPath
-        if FileManager.default.fileExists(atPath: cliTokenPath) { return true }
+        if tokenFilePaths.contains(where: FileManager.default.fileExists(atPath:)) { return true }
         return false
     }
+
+    /// The token files Antigravity keeps, all in one format: the CLI's, and the
+    /// app's own (`jetski-standalone`). Each is refreshed only while its owner
+    /// runs, so whichever ran last holds the token that still works.
+    static let tokenFilePaths: [String] = [
+        "~/.gemini/antigravity-cli/antigravity-oauth-token",
+        "~/.gemini/jetski-standalone-oauth-token",
+    ].map { ($0 as NSString).expandingTildeInPath }
 
     static func hasCredential(for profile: AntigravityProfile) -> Bool {
         if profile.slug == nil { return isSignedIn() }
@@ -126,9 +133,10 @@ struct AntigravityCredentials {
                 let jsonMod = (try? FileManager.default.attributesOfItem(atPath: jsonPath))?[.modificationDate] as? Date
                 let ompPath = ("~/.omp/agent/agent.db" as NSString).expandingTildeInPath
                 let ompMod = (try? FileManager.default.attributesOfItem(atPath: ompPath))?[.modificationDate] as? Date
-                let cliPath = ("~/.gemini/antigravity-cli/antigravity-oauth-token" as NSString).expandingTildeInPath
-                let cliMod = (try? FileManager.default.attributesOfItem(atPath: cliPath))?[.modificationDate] as? Date
-                return [keychainMod, jsonMod, ompMod, cliMod].compactMap { $0 }.max()
+                let tokenFileMods = tokenFilePaths.map {
+                    (try? FileManager.default.attributesOfItem(atPath: $0))?[.modificationDate] as? Date
+                }
+                return ([keychainMod, jsonMod, ompMod] + tokenFileMods).compactMap { $0 }.max()
             },
             reload: read
         )
@@ -214,8 +222,8 @@ struct AntigravityCredentials {
             }
         }
 
-        // Then check ~/.gemini/antigravity-cli/antigravity-oauth-token (Antigravity CLI)
-        if let cliCreds = readCLICredentials() {
+        // Then the token files the CLI and the app write (see `tokenFilePaths`)
+        if let cliCreds = readTokenFiles() {
             if !cliCreds.isExpired {
                 return cliCreds
             }
@@ -261,6 +269,11 @@ struct AntigravityCredentials {
             projectId: payload.projectId,
             email: payload.email
         )
+    }
+
+    /// The longest-lived credential among the token files.
+    static func readTokenFiles(at paths: [String] = tokenFilePaths) -> AntigravityCredentials? {
+        paths.compactMap { readCLICredentials(at: $0) }.max { $0.expiresAt < $1.expiresAt }
     }
 
     static func readCLICredentials(at path: String = ("~/.gemini/antigravity-cli/antigravity-oauth-token" as NSString).expandingTildeInPath) -> AntigravityCredentials? {

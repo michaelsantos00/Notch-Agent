@@ -42,6 +42,8 @@ actor AntigravityProvider: UsageProvider {
     /// number, and a ring that reads 8% one minute and 31 the next looks broken
     /// rather than degraded.
     private var everBridged = false
+    /// Where the last official reading is kept, so it outlives a relaunch.
+    private let defaults: UserDefaults
 
     /// How the language server is asked, when a test needs to say. Production
     /// leaves this nil and goes through `localQuota()`, which spawns `ps` and
@@ -53,7 +55,13 @@ actor AntigravityProvider: UsageProvider {
     init(profile: AntigravityProfile = .default(),
          session: URLSession? = nil,
          localSession: URLSession? = nil,
-         localQuota: (@Sendable () async -> [LimitWindow]?)? = nil) {
+         localQuota: (@Sendable () async -> [LimitWindow]?)? = nil,
+         defaults: UserDefaults? = nil) {
+        // A test that names no store gets a throwaway one: the test host is the
+        // app itself, and its readings must not land in the real preferences.
+        self.defaults = defaults ?? (Runtime.isUnderTest
+            ? UserDefaults(suiteName: "codenotch.antigravity-test.\(UUID().uuidString)")!
+            : .standard)
         self.profile = profile
         self.id = profile.id
         self.displayName = profile.displayName
@@ -111,15 +119,12 @@ actor AntigravityProvider: UsageProvider {
             if let windows = await localQuota(), !windows.isEmpty {
                 everBridged = true
                 UserDefaults.standard.set(true, forKey: "AntigravityEverBridged")
-                
-                return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
-                                        fidelity: .official, status: .ok, windows: windows,
-                                        headlineID: resolveHeadlineID(for: windows),
-                                        weeklyID: resolveWeeklyID(for: windows))
+                return official(windows)
             }
 
-            if localQuotaOverride != nil && everBridged {
-                throw UsageProviderError.credentialExpired
+            if localQuotaOverride != nil {
+                if let carried = carriedForwardSnapshot() { return carried }
+                if everBridged { throw UsageProviderError.credentialExpired }
             }
         }
 
@@ -128,22 +133,23 @@ actor AntigravityProvider: UsageProvider {
         if let credentials,
            let windows = try? await quota(token: credentials.accessToken, project: credentials.projectId),
            !windows.isEmpty {
-            return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
-                                    fidelity: .official, status: .ok, windows: windows,
-                                    headlineID: resolveHeadlineID(for: windows),
-                                    weeklyID: resolveWeeklyID(for: windows))
+            return official(windows)
         }
 
         // 2. Fallback to OMP SQLite store if offline or direct call fails
         if profile.slug == nil {
             let ompWindows = Self.ompUsageWindows(forEmail: credentials?.email)
             if !ompWindows.isEmpty {
-                return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
-                                        fidelity: .official, status: .ok, windows: ompWindows,
-                                        headlineID: resolveHeadlineID(for: ompWindows),
-                                        weeklyID: resolveWeeklyID(for: ompWindows))
+                return official(ompWindows)
             }
         }
+
+        // 3. The last official reading, carried forward. Quota is only spent
+        // while Antigravity or `agy` runs, and while either runs the bridge
+        // reads it — so with both closed the last reading is still true, save
+        // for the windows that have reset since. Only use on another machine
+        // escapes this, which is what the `~` owns up to.
+        if let carried = carriedForwardSnapshot() { return carried }
 
         if everBridged { throw UsageProviderError.credentialExpired }
         // is the only number left — reported as a *count*, with no
@@ -170,6 +176,54 @@ actor AntigravityProvider: UsageProvider {
             ],
             headlineID: "requests"
         )
+    }
+
+    /// An official reading, remembered so it can be carried forward once
+    /// nothing is left to ask.
+    private func official(_ windows: [LimitWindow]) -> ProviderSnapshot {
+        if let data = try? JSONEncoder().encode(windows) {
+            PersistentWrites.perform { defaults.set(data, forKey: rememberedKey) }
+        }
+        return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
+                                fidelity: .official, status: .ok, windows: windows,
+                                headlineID: resolveHeadlineID(for: windows),
+                                weeklyID: resolveWeeklyID(for: windows))
+    }
+
+    private var rememberedKey: String { "antigravityLastQuota.\(id)" }
+
+    /// The remembered reading as it stands now. `.derived`, because the figure
+    /// is Google's but the claim that it still holds is ours.
+    private func carriedForwardSnapshot() -> ProviderSnapshot? {
+        guard let data = defaults.data(forKey: rememberedKey),
+              let windows = try? JSONDecoder().decode([LimitWindow].self, from: data),
+              !windows.isEmpty else { return nil }
+        let carried = Self.carriedForward(windows, now: Date())
+        return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
+                                fidelity: .derived, status: .ok, windows: carried,
+                                headlineID: resolveHeadlineID(for: carried),
+                                weeklyID: resolveWeeklyID(for: carried))
+    }
+
+    /// Every window whose reset has passed is empty again, its next reset the
+    /// first cycle boundary still ahead. Without a cycle length that boundary
+    /// would be a guess, so it is left unknown.
+    nonisolated static func carriedForward(_ windows: [LimitWindow], now: Date) -> [LimitWindow] {
+        windows.map { window in
+            guard let resetsAt = window.resetsAt, resetsAt <= now else { return window }
+            var next: Date?
+            if let duration = window.duration, duration > 0 {
+                let cycles = (now.timeIntervalSince(resetsAt) / duration).rounded(.down) + 1
+                next = resetsAt.addingTimeInterval(cycles * duration)
+            }
+            return LimitWindow(id: window.id, group: window.group, label: window.label,
+                               usedFraction: window.usedFraction.map { _ in 0 },
+                               remaining: window.remaining, used: window.used,
+                               usedText: window.usedText, detail: window.detail,
+                               money: window.money, resetsAt: next, duration: window.duration,
+                               bandOverride: window.bandOverride,
+                               prefersUsedText: window.prefersUsedText)
+        }
     }
 
     nonisolated func resolveHeadlineID(for windows: [LimitWindow]) -> String {

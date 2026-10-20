@@ -14,7 +14,9 @@ actor OllamaProvider: UsageProvider {
     nonisolated let displayName = "Ollama"
     nonisolated let glyph = ProviderGlyph.ollama
 
-    private let endpoint = URL(string: "https://ollama.com/api/usage")!
+    /// Thirty days of day buckets: the widest range the API allows, and enough
+    /// to derive today and the last week from the one request.
+    private let endpoint = URL(string: "https://ollama.com/api/usage?range=30d")!
     private let session: URLSession
 
     init(session: URLSession? = nil) {
