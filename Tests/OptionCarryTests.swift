@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// **⌥-dragged, the notch keeps to the screen's frame and goes round it.**
 ///

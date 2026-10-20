@@ -28,8 +28,8 @@ actor GrokLocalProvider: UsageProvider {
     /// the old one must not outlive that.
     private var renewed: (accessToken: String, expiresAt: Date, from: String)?
 
-    init(session: URLSession = .shared, authURL: URL = GrokCredentials.authURL) {
-        self.session = session
+    init(session: URLSession? = nil, authURL: URL = GrokCredentials.authURL) {
+        self.session = session ?? NetworkPolicy.makeSession(for: .grok)
         self.authURL = authURL
     }
 
@@ -52,7 +52,6 @@ actor GrokLocalProvider: UsageProvider {
             renewed = nil
             throw UsageProviderError.needsAuth
         }
-        Log.usage.debug("grok credits -> \(credits.prefix(400), privacy: .private)")
 
         return ProviderSnapshot(
             id: id,
@@ -102,7 +101,8 @@ actor GrokLocalProvider: UsageProvider {
             ("client_id", clientID),
         ])
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .grok)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .grok))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -132,7 +132,8 @@ actor GrokLocalProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .grok)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .grok))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
         if status == 429 {

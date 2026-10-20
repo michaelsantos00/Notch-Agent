@@ -1,4 +1,4 @@
-//! Cursor usage adapter, implemented from the upstream Codenotch's documented behaviour.
+//! Cursor usage adapter, implemented from the upstream NotchAgent's documented behaviour.
 //!
 //! Data path (same trade-off as upstream: borrow the editor's own session):
 //!   1. Credential: the editor keeps its sign-in in the global state database it inherited from

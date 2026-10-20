@@ -19,10 +19,10 @@ actor CommandCodeProvider: UsageProvider {
     nonisolated(unsafe) private var lastKnownPlan: String?
     nonisolated(unsafe) private var lastKnownUser: String?
 
-    init(session: URLSession = .shared,
+    init(session: URLSession? = nil,
          archive: UsageArchive = UsageArchive(),
          authURL: URL = CommandCodeCredentials.authURL) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .commandcode)
         self.archive = archive
         self.authURL = authURL
         self.retryNoEarlierThan = archive.loadBackoffUntil(providerID: id)
@@ -123,8 +123,9 @@ actor CommandCodeProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .commandcode)
         Log.usage.debug("GET \(url.host ?? "", privacy: .public)\(url.path, privacy: .public)")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .commandcode))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
         if status == 429 {

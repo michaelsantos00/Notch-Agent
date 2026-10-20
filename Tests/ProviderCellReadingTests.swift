@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 @MainActor
 final class ProviderCellReadingTests: XCTestCase {

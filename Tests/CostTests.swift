@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// The cost layer's seams into the app: the hover card reserves room for
 /// the project rows, a credit-based Codex seat gets a Credits window, and the
@@ -48,10 +48,13 @@ final class CostTests: XCTestCase {
 
     /// The card's range follows the account's allowance, never "all time".
     @MainActor func testCostRangeNeverStartsOnAllTime() {
-        UserDefaults.standard.set("allTime", forKey: "costRange")
+        let name = "codenotch.cost-range-test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("allTime", forKey: "costRange")
         let account = CostAccount(id: "test-x", provider: "claude", name: "Test", configDirectory: URL(fileURLWithPath: "/nonexistent"))
-        let model = CostModel(account: account)
+        let model = CostModel(account: account, defaults: defaults)
         XCTAssertNotEqual(model.range, .allTime)
-        UserDefaults.standard.removeObject(forKey: "costRange")
+        model.stop()
     }
 }

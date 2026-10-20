@@ -37,7 +37,7 @@ final class LMStudioLocalProvider: UsageProvider {
          token: @escaping () -> String? = { LMStudioCredentials.load() },
          inventoryInterval: TimeInterval = 5, now: @escaping () -> Date = Date.init) {
         self.endpoint = endpoint
-        self.session = session ?? OllamaLocalProvider.makeSession()
+        self.session = session ?? NetworkPolicy.makeSession(for: .lmstudioLocal)
         self.token = token
         self.inventoryInterval = inventoryInterval
         self.now = now
@@ -58,10 +58,11 @@ final class LMStudioLocalProvider: UsageProvider {
         if let token = token() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        try NetworkPolicy.validate(request: request, for: .lmstudioLocal)
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .lmstudioLocal))
         } catch where error is CancellationError || (error as? URLError)?.code == .cancelled {
             throw CancellationError()
         } catch {

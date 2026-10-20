@@ -1,6 +1,5 @@
 import XCTest
-import Sparkle
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Fixtures are the real thing: the keychain payload's shape and the actual
 /// `loadCodeAssist` response from a signed-in install.
@@ -68,6 +67,29 @@ final class AntigravityCredentialsTests: XCTestCase {
         XCTAssertEqual(creds.accessToken, "token-123")
         XCTAssertEqual(creds.projectId, "aicode-consumers")
         XCTAssertEqual(creds.email, "user@example.com")
+        XCTAssertFalse(creds.isExpired)
+    }
+
+    func testReadsAntigravityCLITokenFormat() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let tokenFile = tempDir.appendingPathComponent("antigravity-oauth-token")
+        let json = """
+        {
+          "token": {
+            "access_token": "ya29.cli-token-abc",
+            "token_type": "Bearer",
+            "refresh_token": "1//refresh",
+            "expiry": "2126-09-30T15:38:05.964661-04:00"
+          },
+          "auth_method": "consumer"
+        }
+        """
+        try json.write(to: tokenFile, atomically: true, encoding: .utf8)
+        let creds = try XCTUnwrap(AntigravityCredentials.readCLICredentials(at: tokenFile.path))
+        XCTAssertEqual(creds.accessToken, "ya29.cli-token-abc")
+        XCTAssertEqual(creds.authMethod, "consumer")
         XCTAssertFalse(creds.isExpired)
     }
 }
@@ -1150,12 +1172,11 @@ final class AntigravityFallbackTests: XCTestCase {
     }
 }
 
-final class AuthorCreditTests: XCTestCase {
-    /// Pinned because a wrong handle in a credit is worse than none, and it is
-    /// the kind of string nobody re-reads once it looks right.
-    func testTheCreditPointsAtTheRightAccount() {
-        XCTAssertEqual(SettingsView.authorURL.absoluteString, "https://x.com/hivinz_")
-        XCTAssertEqual(SettingsView.authorURL.scheme, "https")
+final class ProjectSourceLinkTests: XCTestCase {
+    /// The visible source link must lead to this fork rather than the upstream author.
+    func testSourceLinkPointsToThisFork() {
+        XCTAssertEqual(SettingsView.sourceURL.absoluteString, "https://github.com/michaelsantos00/Notch-Agent")
+        XCTAssertEqual(SettingsView.sourceURL.scheme, "https")
     }
 }
 
@@ -1249,8 +1270,8 @@ final class UpdateOutcomeTests: XCTestCase {
     /// The distinction the wording depends on: a feed that cannot be fetched is
     /// routine, anything else is reported as itself.
     func testOnlyAFeedFailureCountsAsUnreachable() {
-        XCTAssertTrue(Updater.isUnreachable(Int(SUError.appcastError.rawValue)))
-        XCTAssertFalse(Updater.isUnreachable(Int(SUError.installationError.rawValue)))
+        XCTAssertTrue(Updater.isUnreachable(404))
+        XCTAssertFalse(Updater.isUnreachable(500))
     }
 }
 
@@ -1350,7 +1371,7 @@ final class StatusMenuTests: XCTestCase {
         XCTAssertTrue(titles[1].contains("29% Used · 71% left"), titles[1])
         XCTAssertTrue(titles.contains("Refresh all"))
         XCTAssertTrue(titles.contains("Settings…"))
-        XCTAssertTrue(titles.contains("Quit Codenotch"))
+        XCTAssertTrue(titles.contains("Quit NotchAgent"))
         // The header re-reads its own provider.
         XCTAssertEqual(menu.items[0].representedObject as? String, "codex")
     }
@@ -1745,4 +1766,5 @@ private final class GoogleStub: URLProtocol {
     }
 
     override func stopLoading() {}
+
 }

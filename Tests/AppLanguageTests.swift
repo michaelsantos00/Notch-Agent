@@ -1,15 +1,15 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// In-app language is a stored override, not the Mac's language. Follow
-/// System still hits the XCTest English pin when nothing is stored.
+/// System remains an explicit choice and uses the XCTest English pin.
 final class AppLanguageTests: XCTestCase {
     private var suiteName = ""
     private var previousDefaults: UserDefaults?
     private var previousTestLocale: Locale?
 
     /// A scratch suite, not `.standard`. The test host *is* the app, so
-    /// `.standard` is the preferences of the copy of Codenotch installed on
+    /// `.standard` is the preferences of the copy of NotchAgent installed on
     /// this Mac: reading it would let a language chosen in Settings decide
     /// what these assert, and writing it would leave a language behind in the
     /// real app when a test failed before its restore.
@@ -37,7 +37,7 @@ final class AppLanguageTests: XCTestCase {
         L10n.testLocale = nil
         XCTAssertTrue(
             L10n.locale.identifier.hasPrefix("en"),
-            "XCTest pin should return English when appLanguage is unset, got \(L10n.locale.identifier)"
+            "XCTest pin should return English for Follow System, got \(L10n.locale.identifier)"
         )
     }
 
@@ -49,6 +49,32 @@ final class AppLanguageTests: XCTestCase {
         L10n.apply(.english)
         L10n.testLocale = nil
         XCTAssertEqual(L10n.t("Always show"), "Always show")
+    }
+
+    @MainActor
+    func testUnsetLanguageDefaultsToAmericanEnglish() {
+        L10n.defaults.removeObject(forKey: L10n.languageDefaultsKey)
+        XCTAssertEqual(Preferences(defaults: L10n.defaults).language, .english)
+        XCTAssertEqual(AppLanguage.english.title, "English (US)")
+        XCTAssertEqual(L10n.locale.identifier, "en")
+        XCTAssertEqual(L10n.t("Color ramp"), "Color ramp")
+    }
+
+    @MainActor
+    func testFollowSystemIsAnExplicitPersistentChoice() {
+        L10n.apply(.system)
+        XCTAssertEqual(L10n.defaults.string(forKey: L10n.languageDefaultsKey), "system")
+        XCTAssertEqual(Preferences(defaults: L10n.defaults).language, .system)
+    }
+
+    @MainActor
+    func testInvalidLanguageFallsBackToEnglishWithoutChangingSavedLanguages() {
+        L10n.defaults.set("invalid-language", forKey: L10n.languageDefaultsKey)
+        XCTAssertEqual(Preferences(defaults: L10n.defaults).language, .english)
+        XCTAssertEqual(L10n.locale.identifier, "en")
+        L10n.apply(.french)
+        XCTAssertEqual(Preferences(defaults: L10n.defaults).language, .french)
+        XCTAssertEqual(L10n.locale.identifier, "fr")
     }
 
     /// `apply(.simplifiedChinese)` stores `zh-Hans`, and `L10n.locale`

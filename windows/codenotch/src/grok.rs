@@ -2,7 +2,7 @@
 //!
 //! Data path (the same bargain the other providers strike: borrow the CLI's own session):
 //!   1. Credential: Grok CLI signs in through `auth.x.ai` and writes the session to
-//!      `%USERPROFILE%\.grok\auth.json`. Codenotch only ever reads it — refreshing is the CLI's
+//!      `%USERPROFILE%\.grok\auth.json`. NotchAgent only ever reads it — refreshing is the CLI's
 //!      job, and writing a new access token would race it for the file.
 //!      The file is an object keyed by `<issuer>::<client_id>`; each entry carries `key` (the
 //!      bearer token), `expires_at` and `email`.

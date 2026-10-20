@@ -24,11 +24,13 @@ final class CostIndexer {
     private let format: Format
     /// Codex rollouts carry session id, cwd and model in earlier lines than the
     /// token counts; remember them per file across incremental reads.
+    private let queueKey = DispatchSpecificKey<Void>()
     private var codexContext: [String: (sessionId: String, cwd: String, model: String)] = [:]
     private let queue = DispatchQueue(label: "com.vinz.codenotch.costs.indexer", qos: .utility)
     private var stream: FSEventStreamRef?
     private var gitRootCache: [String: String] = [:]
     private var scanScheduled = false
+    private(set) var isStopped = false
 
     /// Called on the indexer queue after a pass that changed something.
     var onChange: (() -> Void)?
@@ -37,23 +39,43 @@ final class CostIndexer {
         self.store = store
         self.root = root
         self.format = format
+        queue.setSpecific(key: queueKey, value: ())
         guard FileManager.default.fileExists(atPath: root.path) else { return nil }
     }
 
-    deinit { stopWatching() }
+    deinit { stop() }
 
     // MARK: Scanning
 
     func start() {
+        guard !isStopped else { return }
         scan()
         startWatching()
     }
 
+    /// Stops FSEvents watching and prevents further scans.
+    /// Safe against deadlocks if deinit runs on the indexer queue itself.
+    func stop() {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            isStopped = true
+            stopWatching()
+        } else {
+            queue.sync {
+                isStopped = true
+                stopWatching()
+            }
+        }
+    }
+
     func scan() {
-        queue.async { [weak self] in self?.performScan() }
+        queue.async { [weak self] in
+            guard let self, !self.isStopped else { return }
+            self.performScan()
+        }
     }
 
     private func performScan() {
+        guard !isStopped else { return }
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
         guard let e = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys,
                                                      options: [.skipsHiddenFiles]) else { return }
@@ -73,11 +95,15 @@ final class CostIndexer {
     /// Returns true when new rows were written.
     @discardableResult
     private func indexFile(_ url: URL) -> Bool {
+        guard !isStopped else { return false }
         let path = url.path
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return false }
         let size = (attrs[.size] as? Int) ?? 0
         let inode = (attrs[.systemFileNumber] as? Int) ?? 0
         let mtime = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let cutoff = max(store.metadata("retention_cutoff_ts").flatMap(Int.init) ?? 0,
+                         store.metadata("history_cleared_at").flatMap(Int.init) ?? 0)
+        guard mtime >= Double(cutoff) else { return false }
 
         var offset = 0
         if let cursor = store.fileCursor(path) {

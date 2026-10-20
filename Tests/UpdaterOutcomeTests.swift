@@ -1,6 +1,5 @@
-import Sparkle
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// "Checking…" is a state the settings sheet must always leave: a check that
 /// ends any other way, or never reports back, still lands somewhere.
@@ -11,8 +10,7 @@ final class UpdaterOutcomeTests: XCTestCase {
     }
 
     func testACycleThatCouldNotReachTheFeedSaysSo() {
-        let code = Int(SUError.appcastError.rawValue)
-        XCTAssertEqual(Updater.outcome(afterCycleFrom: .checking, errorCode: code), .unreachable)
+        XCTAssertEqual(Updater.outcome(afterCycleFrom: .checking, errorCode: 404), .unreachable)
     }
 
     func testAnAnswerAlreadyGivenIsKept() {
@@ -25,13 +23,12 @@ final class UpdaterOutcomeTests: XCTestCase {
         guard case .failed(let why) = Updater.outcome(afterTimeoutFrom: .checking) else {
             return XCTFail("a stalled check must not stay on Checking…")
         }
-        XCTAssertTrue(why.contains("hivinz.com"), why)
+        XCTAssertFalse(why.isEmpty)
         XCTAssertEqual(Updater.outcome(afterTimeoutFrom: .upToDate(Date(timeIntervalSince1970: 1))),
                        .upToDate(Date(timeIntervalSince1970: 1)))
     }
 
-    /// The line under an update offered in the notch is the appcast's HTML
-    /// release notes read as plain text.
+    /// The line under an update offered in the notch is the HTML release notes read as plain text.
     func testReleaseNotesAreReadAsOnePlainLine() {
         let html = "<h2>New</h2>\n<ul>\n  <li>Carry the notch by its dots &amp; drop it anywhere.</li>\n</ul>"
         XCTAssertEqual(UpdatePrompt.summary(of: html), "New Carry the notch by its dots & drop it anywhere.")

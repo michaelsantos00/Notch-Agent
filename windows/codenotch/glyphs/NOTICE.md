@@ -6,7 +6,7 @@ The SVG files in this directory come from the npm package `@lobehub/icons-static
 | File | Original file in the package | Shown in |
 |---|---|---|
 | claude.svg | icons/claude.svg | Claude cell |
-| codex.svg | icons/openai.svg | Codex cell (the OpenAI mark, matching upstream Codenotch's glyph choice) |
+| codex.svg | icons/openai.svg | Codex cell (the OpenAI mark, matching upstream NotchAgent's glyph choice) |
 | codex-alt.svg | icons/codex.svg | alternative: Codex's own mark |
 | cursor.svg | icons/cursor.svg | Cursor cell |
 | grok.svg | icons/grok.svg | Grok cell |

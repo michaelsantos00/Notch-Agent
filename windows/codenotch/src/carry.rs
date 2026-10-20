@@ -429,7 +429,7 @@ fn show(app: &AppHandle, screen: &crate::Screen) {
     }
     let (ax, ay, aw, ah) = screen.area();
     let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("carry.html".into()))
-        .title("Codenotch carry")
+        .title("NotchAgent carry")
         .position(ax as f64 / screen.scale, ay as f64 / screen.scale)
         .inner_size(aw as f64 / screen.scale, ah as f64 / screen.scale)
         .decorations(false)

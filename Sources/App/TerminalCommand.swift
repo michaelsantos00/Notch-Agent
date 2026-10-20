@@ -3,7 +3,7 @@ import Foundation
 
 /// A command-line tool's login runs in the user's terminal, because that is
 /// where the tool expects to be: it prints a URL, opens the browser and waits
-/// for the callback on its own port. Codenotch only has to type the command
+/// for the callback on its own port. NotchAgent only has to type the command
 /// into a fresh window of whichever terminal is installed.
 enum TerminalCommand {
     /// Ghostty and iTerm2 before Terminal, because whoever has installed one
@@ -37,38 +37,17 @@ enum TerminalCommand {
                     "\(home)/.bun/bin", "\(home)/.cargo/bin", "\(home)/.grok/bin", "/usr/bin"]
         dirs += (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
         var ok = dirs.contains { FileManager.default.isExecutableFile(atPath: "\($0)/\(binary)") }
-        // The login shell knows about version managers (nvm, mise) that the
-        // list above does not. Not under test: the suite must not depend on
-        // what the host Mac has installed.
-        if !ok, !Runtime.isUnderTest { ok = loginShellFinds(binary) }
+        // Automatic login shell process execution is disabled in this private build.
+        // Binary detection relies on static well-known paths and inherited PATH.
         cacheLock.lock()
         installedCache[binary] = (Date(), ok)
         cacheLock.unlock()
         return ok
     }
 
-    /// Whether the login shell finds `binary`, given a few seconds to say.
-    ///
-    /// **Waited on without turning the run loop.** `waitUntilExit` runs the
-    /// current run loop while it waits, and on the main thread that let
-    /// SwiftUI redraw in the middle of the wait — a settings row asking this
-    /// again from inside its own question, on a lock it already held. The app
-    /// hung for good the moment a provider was switched on whose tool is not
-    /// in one of the usual places.
+    /// Login shell subprocess invocation is disabled for privacy.
     private static func loginShellFinds(_ binary: String) -> Bool {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", "command -v \(binary) >/dev/null 2>&1"]
-        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-        let done = DispatchSemaphore(value: 0)
-        p.terminationHandler = { _ in done.signal() }
-        guard (try? p.run()) != nil else { return false }
-        // A shell stuck on its own startup is not a reason to stop the app.
-        guard done.wait(timeout: .now() + 3) == .success else {
-            p.terminate()
-            return false
-        }
-        return p.terminationStatus == 0
+        return false
     }
 
     /// Run a command in a new window of the first installed terminal.

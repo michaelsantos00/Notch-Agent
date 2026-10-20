@@ -17,8 +17,8 @@ actor KimiProvider: UsageProvider {
     private let session: URLSession
     private let authURL: URL
 
-    init(session: URLSession = .shared, authURL: URL = KimiCredentials.authURL) {
-        self.session = session
+    init(session: URLSession? = nil, authURL: URL = KimiCredentials.authURL) {
+        self.session = session ?? NetworkPolicy.makeSession(for: .kimi)
         self.authURL = authURL
     }
 
@@ -33,7 +33,6 @@ actor KimiProvider: UsageProvider {
         if credentials.isExpired { throw UsageProviderError.credentialExpired }
 
         let body = try await fetch(token: credentials.accessToken)
-        Log.usage.debug("kimi usages -> \(body.prefix(400), privacy: .public)")
         let read = try KimiUsage.read(fromJSON: body)
 
         return ProviderSnapshot(
@@ -55,8 +54,9 @@ actor KimiProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .kimi)
         Log.usage.debug("GET api.kimi.com/coding/v1/usages")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .kimi))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         Log.usage.debug("kimi usages endpoint answered \(status)")
 

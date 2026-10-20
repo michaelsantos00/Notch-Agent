@@ -31,9 +31,9 @@ actor KiloProvider: UsageProvider {
     /// The plan the last successful answer named, for the settings row.
     nonisolated(unsafe) private var lastKnownPlan: String?
 
-    init(session: URLSession = .shared, archive: UsageArchive = UsageArchive(),
+    init(session: URLSession? = nil, archive: UsageArchive = UsageArchive(),
          authURL: URL = KiloCredentials.authURL, baseURL: URL = URL(string: "https://api.kilo.ai")!) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .kilo)
         self.archive = archive
         self.authURL = authURL
         self.baseURL = baseURL
@@ -177,8 +177,9 @@ actor KiloProvider: UsageProvider {
         }
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .kilo)
         Log.usage.debug("GET \(components.url?.host ?? "", privacy: .public)/api/trpc/\(procedure, privacy: .public)")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .kilo))
         return try Self.read(data, from: response)
     }
 
@@ -192,8 +193,9 @@ actor KiloProvider: UsageProvider {
         }
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .kilo)
         Log.usage.debug("GET \(self.baseURL.host ?? "", privacy: .public)/\(path, privacy: .public)")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .kilo))
         return try Self.read(data, from: response)
     }
 

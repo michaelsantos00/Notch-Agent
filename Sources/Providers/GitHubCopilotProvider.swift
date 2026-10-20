@@ -11,9 +11,9 @@ actor GitHubCopilotProvider: UsageProvider {
     private let session: URLSession
     private let loadCredentials: @Sendable () throws -> GitHubCopilotCredentials
 
-    init(session: URLSession = .shared,
+    init(session: URLSession? = nil,
          loadCredentials: (@Sendable () throws -> GitHubCopilotCredentials)? = nil) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .githubCopilot)
         self.loadCredentials = loadCredentials ?? { try GitHubCopilotCredentials.load() }
     }
 
@@ -31,10 +31,11 @@ actor GitHubCopilotProvider: UsageProvider {
         request.setValue("Bearer \(credentials.token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-        request.setValue("Codenotch", forHTTPHeaderField: "User-Agent")
+        request.setValue("NotchAgent", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 15
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .githubCopilot)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .githubCopilot))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
         if status == 429 {
@@ -109,27 +110,44 @@ struct GitHubCopilotCredentials: Sendable {
         )
     }
 
+    static let ghAuthTokenArguments = ["auth", "token", "--hostname", "github.com"]
+
     private static func ghToken() -> String? {
         let candidates = [
             "/opt/homebrew/bin/gh",
             "/usr/local/bin/gh",
-            "/usr/bin/gh"
+            "/usr/bin/gh",
+            ("/opt/local/bin/gh" as NSString).expandingTildeInPath,
+            ("~/.nix-profile/bin/gh" as NSString).expandingTildeInPath,
+            ("~/.local/bin/gh" as NSString).expandingTildeInPath
         ]
-        guard let executable = candidates.first(where: {
-            FileManager.default.isExecutableFile(atPath: $0)
-        }) else { return nil }
-
+        guard let binary = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            return nil
+        }
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = ["auth", "token", "--hostname", "github.com"]
+        process.executableURL = URL(fileURLWithPath: binary)
+        process.arguments = ghAuthTokenArguments
+        process.standardInput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        return String(data: data, encoding: .utf8).flatMap(nonEmpty)
+        do {
+            try process.run()
+            let watchdog = DispatchWorkItem {
+                if process.isRunning { process.terminate() }
+            }
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5, execute: watchdog)
+            defer { watchdog.cancel() }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            guard let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return nil }
+            return text
+        } catch {
+            return nil
+        }
     }
 
     private static func parseHosts(_ text: String?) -> (username: String?, token: String?) {

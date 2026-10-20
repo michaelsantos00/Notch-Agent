@@ -1,4 +1,4 @@
-# Codenotch Phone Link — protocol v3
+# NotchAgent Phone Link — protocol v3
 
 **Status:** contract for implementation. Both the Mac server and the phone client
 build against this document. Where this document and existing code disagree,

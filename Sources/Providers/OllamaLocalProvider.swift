@@ -25,10 +25,11 @@ final class OllamaLocalProvider: UsageProvider {
         request.timeoutInterval = 3
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        try NetworkPolicy.validate(request: request, for: .ollamaLocal)
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .ollamaLocal))
         } catch where error is CancellationError || (error as? URLError)?.code == .cancelled {
             throw CancellationError()
         } catch {
@@ -43,23 +44,8 @@ final class OllamaLocalProvider: UsageProvider {
     }
 
     nonisolated static func makeSession() -> URLSession {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpCookieStorage = nil
-        configuration.httpShouldSetCookies = false
-        configuration.urlCredentialStorage = nil
-        configuration.connectionProxyDictionary = [:]
-        return URLSession(configuration: configuration,
-                          delegate: OllamaRedirectPolicy(), delegateQueue: nil)
+        NetworkPolicy.makeSession(for: .ollamaLocal)
     }
 }
 
-/// A model listing has no redirect workflow. Refusing redirects also prevents
-/// a configured local service from silently moving monitoring to another host.
-final class OllamaRedirectPolicy: NSObject, URLSessionTaskDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask,
-                    willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest,
-                    completionHandler: @escaping (URLRequest?) -> Void) {
-        completionHandler(nil)
-    }
-}
+typealias OllamaRedirectPolicy = NetworkPolicy.PolicyDelegate

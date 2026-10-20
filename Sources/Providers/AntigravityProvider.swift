@@ -51,16 +51,15 @@ actor AntigravityProvider: UsageProvider {
     private let localQuotaOverride: (@Sendable () async -> [LimitWindow]?)?
 
     init(profile: AntigravityProfile = .default(),
-         session: URLSession = .shared,
+         session: URLSession? = nil,
+         localSession: URLSession? = nil,
          localQuota: (@Sendable () async -> [LimitWindow]?)? = nil) {
         self.profile = profile
         self.id = profile.id
         self.displayName = profile.displayName
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .antigravityRemote)
         self.localQuotaOverride = localQuota
-        self.localSession = URLSession(configuration: .ephemeral,
-                                       delegate: LocalhostTrust(),
-                                       delegateQueue: nil)
+        self.localSession = localSession ?? NetworkPolicy.makeSession(for: .antigravityLocal)
     }
 
     nonisolated var signInRoute: SignInRoute {
@@ -240,7 +239,7 @@ actor AntigravityProvider: UsageProvider {
                 let windows = try await AntigravityBridge.quota(from: bridge, session: localSession)
                 if !windows.isEmpty { return windows }
             } catch {
-                Log.usage.error("Antigravity localQuota bridge error: \(String(describing: error), privacy: .public)")
+                Log.usage.error("Antigravity localQuota bridge error: \(UsageStore.sanitizedDescription(for: error), privacy: .public)")
             }
         }
         // Cached endpoint gone or never found: the port changes every time
@@ -254,7 +253,7 @@ actor AntigravityProvider: UsageProvider {
         do {
             return try await AntigravityBridge.quota(from: fresh, session: localSession)
         } catch {
-            Log.usage.error("Antigravity localQuota fresh bridge error: \(String(describing: error), privacy: .public)")
+            Log.usage.error("Antigravity localQuota fresh bridge error: \(UsageStore.sanitizedDescription(for: error), privacy: .public)")
             return nil
         }
     }
@@ -273,7 +272,12 @@ actor AntigravityProvider: UsageProvider {
         request.httpBody = try? JSONSerialization.data(withJSONObject: bodyObj)
         request.timeoutInterval = 15
 
-        guard let (data, response) = try? await session.data(for: request),
+        do {
+            try NetworkPolicy.validate(request: request, for: .antigravityRemote)
+        } catch {
+            return nil
+        }
+        guard let (data, response) = try? await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .antigravityRemote)),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return Self.windows(in: data)
     }

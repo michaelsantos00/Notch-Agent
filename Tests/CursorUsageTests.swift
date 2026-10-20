@@ -1,6 +1,6 @@
 import SQLite3
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Pinned to a response recorded from a live free account. `/api/usage-summary`
 /// is not a documented API, so this is what fails first if it changes.

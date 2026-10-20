@@ -15,13 +15,13 @@
 # on subsequent runs.
 #
 # Usage:
-#   Scripts/sign-local.sh [path/to/Codenotch.app]
+#   Scripts/sign-local.sh [path/to/NotchAgent.app]
 # Default target is the app in /Applications.
 
 set -euo pipefail
 
-APP="${1:-/Applications/Codenotch.app}"
-CN="Codenotch Local Signing"
+APP="${1:-/Applications/NotchAgent.app}"
+CN="NotchAgent Local Signing"
 
 if [ ! -d "$APP" ]; then
   echo "error: $APP not found — build and install it first (make run)." >&2
@@ -58,12 +58,12 @@ EOF
 fi
 
 # Quit a running instance so the bundle can be replaced in place.
-osascript -e 'quit app "Codenotch"' 2>/dev/null || true
+osascript -e 'quit app "NotchAgent"' 2>/dev/null || true
 sleep 1
 
 codesign --force --deep --sign "$CN" "$APP"
 codesign -dv "$APP" 2>&1 | grep -E 'Authority|Identifier' || true
 
 echo
-echo "Signed with '$CN'. Relaunch Codenotch and grant the keychain prompt one"
+echo "Signed with '$CN'. Relaunch NotchAgent and grant the keychain prompt one"
 echo "more time (new identity) — it will not ask again on later launches."

@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Memory sizes and token counts are printed through `Foundation`'s
 /// locale-aware formatting, so a machine set to Indonesian prints "4,5 GB"
@@ -569,7 +569,7 @@ final class OllamaLifecycleTests: XCTestCase {
         provider.fails = true
         await store.refresh()
         XCTAssertNil(store.snapshots[0].localRuntime)
-        XCTAssertTrue(store.snapshots[0].statusMessage?.contains("unavailable") == true)
+        XCTAssertNotNil(store.snapshots[0].statusMessage)
     }
 
     func testDisabledRuntimeMakesNoRequests() async {

@@ -27,11 +27,21 @@ public enum CustomEndpointDetectionResult: Equatable, Sendable {
 public actor CustomEndpointNetwork {
     public static let shared = CustomEndpointNetwork()
 
-    private let noRedirects = NoRedirects()
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.ephemeral
+            config.httpCookieStorage = nil
+            config.urlCredentialStorage = nil
+            config.httpShouldSetCookies = false
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+            config.urlCache = nil
+            config.connectionProxyDictionary = [:]
+            self.session = URLSession(configuration: config, delegate: NetworkPolicy.PolicyDelegate.shared, delegateQueue: nil)
+        }
     }
 
     private enum RawHTTPResult {
@@ -42,6 +52,11 @@ public actor CustomEndpointNetwork {
     }
 
     private func requestRaw(url: URL, apiKey: String, headerKey: String) async -> RawHTTPResult {
+        do {
+            try NetworkPolicy.validate(url: url, for: .customDiscovery(baseURL: url))
+        } catch {
+            return .unavailable
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 6
@@ -55,7 +70,7 @@ public actor CustomEndpointNetwork {
             }
         }
         do {
-            let (data, response) = try await session.data(for: request, delegate: noRedirects)
+            let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.PolicyDelegate.shared)
             guard let http = response as? HTTPURLResponse else {
                 return .unavailable
             }
@@ -279,7 +294,8 @@ public actor CustomEndpointNetwork {
 
         let start = DispatchTime.now()
         do {
-            let (data, response) = try await URLSession.shared.data(for: request, delegate: noRedirects)
+            try NetworkPolicy.validate(url: modelsURL, for: .customDiscovery(baseURL: url))
+            let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.PolicyDelegate.shared)
             let elapsedNano = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
             let latencyMs = max(1, Int(elapsedNano / 1_000_000))
 
@@ -324,6 +340,7 @@ public actor CustomEndpointNetwork {
     }
 
     public func fetchJSONUsage(
+        baseURL: String,
         usageURL: String,
         apiKey: String,
         headerKey: String,
@@ -335,6 +352,10 @@ public actor CustomEndpointNetwork {
         guard let url = URL(string: usageURL), CustomEndpoint.isValidURL(usageURL) else {
             throw UsageProviderError.badResponse(status: 400)
         }
+        guard let base = URL(string: baseURL), CustomEndpoint.isValidURL(baseURL) else {
+            throw UsageProviderError.badResponse(status: 400)
+        }
+        try NetworkPolicy.validate(url: url, for: .customEndpoint(baseURL: base, authorizedUsageURL: url))
         let data = try await presetResponse(url: url, apiKey: apiKey, headerKey: headerKey)
         guard let tokens = Self.parseJSONUsage(
             data: data,
@@ -412,9 +433,14 @@ public actor CustomEndpointNetwork {
                 group.addTask {
                     let baseURL = "http://localhost:\(candidate.port)/v1"
                     guard let url = URL(string: "\(baseURL)/models") else { return nil }
+                    do {
+                        try NetworkPolicy.validate(url: url, for: .customDiscovery(baseURL: url))
+                    } catch {
+                        return nil
+                    }
                     var req = URLRequest(url: url)
                     req.timeoutInterval = 1.2
-                    guard let (_, res) = try? await URLSession.shared.data(for: req),
+                    guard let (_, res) = try? await self.session.data(for: req, delegate: NetworkPolicy.PolicyDelegate.shared),
                           let http = res as? HTTPURLResponse,
                           (200...299).contains(http.statusCode) else {
                         return nil
@@ -449,13 +475,15 @@ actor CustomEndpointProvider: UsageProvider {
 
     init(
         endpoint: CustomEndpoint,
-        session: URLSession = .shared,
+        session: URLSession? = nil,
         network: CustomEndpointNetwork = .shared,
         endpointLoader: @escaping @Sendable (String) -> CustomEndpoint? = { CustomEndpointProvider.storedEndpoint(id: $0) }
     ) {
         self.endpointID = endpoint.id
         self.id = endpoint.providerID
-        self.session = session
+        let base = URL(string: endpoint.baseURL) ?? URL(string: "http://127.0.0.1")!
+        let usage = endpoint.usageURL.flatMap(URL.init(string:))
+        self.session = session ?? NetworkPolicy.makeSession(for: .customEndpoint(baseURL: base, authorizedUsageURL: usage))
         self.network = network
         self.endpointLoader = endpointLoader
     }
@@ -614,6 +642,7 @@ actor CustomEndpointProvider: UsageProvider {
            let modelField = current.usageModelField,
            let tokenField = current.usageTokenField {
             usageTokens = try await CustomEndpointNetwork.shared.fetchJSONUsage(
+                baseURL: current.baseURL,
                 usageURL: usageURL,
                 apiKey: apiKey,
                 headerKey: current.headerKey,

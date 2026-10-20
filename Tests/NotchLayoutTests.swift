@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// The layout is a scaled copy of `docs/design/frame-124-hover-tooltip.png`.
 /// These pin the ratios the frame fixes, so a change to `Design.scale` resizes
@@ -1024,6 +1024,38 @@ final class NotchFleetReconcileTests: XCTestCase {
 /// is the count follows the scope, not a fixed number.
 @MainActor
 final class NotchFleetScopeTests: XCTestCase {
+    func testContextMenuRecentersLiveNotchesAndOnlyTheCurrentEdgesSavedPosition() throws {
+        let name = "NotchRecenterTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.setOffset(120, for: .right)
+        preferences.setOffset(-75, for: .left)
+
+        let fleet = NotchFleet(scope: .allDisplays, edge: .right)
+        fleet.onReposition = { preferences.setOffset($0, for: .right) }
+        fleet.apply(alongOffset: preferences.offset(for: .right))
+        fleet.show()
+        defer { fleet.stop() }
+        guard let controller = fleet.controllersForTesting.first else {
+            throw XCTSkip("No display available for notch menu verification")
+        }
+        let menu = controller.contextMenu()
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Recenter notch" })
+        XCTAssertTrue(item.isEnabled)
+        let action = try XCTUnwrap(item.action)
+        XCTAssertTrue(NSApp.sendAction(action, to: item.target, from: item))
+        XCTAssertTrue(fleet.controllersForTesting.allSatisfy { $0.model.alongOffset == 0 })
+
+        let reopened = Preferences(defaults: defaults)
+        XCTAssertEqual(reopened.offset(for: .right), 0)
+        XCTAssertEqual(reopened.offset(for: .left), -75)
+        fleet.stop()
+        fleet.show()
+        XCTAssertTrue(fleet.controllersForTesting.allSatisfy { $0.model.alongOffset == 0 },
+                      "Recreated panels must retain the centered fleet position")
+    }
+
     func testMainDisplayKeepsASingleNotch() {
         let fleet = NotchFleet(scope: .mainDisplay, edge: .right)
         fleet.show()

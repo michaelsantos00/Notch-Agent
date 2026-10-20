@@ -112,6 +112,9 @@ struct KiroCLI: Sendable {
 
     /// Runs `/usage` and returns what it reported.
     static func run(binary: URL, timeout: TimeInterval = timeout) throws -> String {
+        guard Runtime.isUnderTest else {
+            throw UsageProviderError.nothingMetered("Automatic Kiro CLI execution is disabled for privacy.")
+        }
         var environment = ProcessInfo.processInfo.environment
         // 2.x defaults to a TUI. xterm-256color makes that TUI think it has
         // a capable terminal; launched from Terminal it then drives the

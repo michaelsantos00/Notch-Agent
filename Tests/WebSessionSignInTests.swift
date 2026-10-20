@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Opening a sign-in sheet has to leave every site able to become signed in.
 ///

@@ -36,12 +36,12 @@ pub fn usage_succeeded() {
 
 // No interpolated shell input: even paths containing apostrophes arrive in env.
 #[cfg(windows)]
-const LOGIN_SCRIPT: &str = "$Host.UI.RawUI.WindowTitle = 'Codenotch - Claude sign-in'; Write-Host 'Complete sign-in in your browser. Paste any code in this window.'; & $env:CODENOTCH_CLAUDE_CLI auth login --claudeai; $loginResult = $LASTEXITCODE; if ($loginResult -eq 0) { Write-Host 'Sign-in complete. Codenotch will refresh automatically.'; Start-Sleep -Seconds 2 } else { Write-Host 'Sign-in failed or cancelled. Retry from Codenotch.'; Start-Sleep -Seconds 8 }; exit $loginResult";
+const LOGIN_SCRIPT: &str = "$Host.UI.RawUI.WindowTitle = 'NotchAgent - Claude sign-in'; Write-Host 'Complete sign-in in your browser. Paste any code in this window.'; & $env:CODENOTCH_CLAUDE_CLI auth login --claudeai; $loginResult = $LASTEXITCODE; if ($loginResult -eq 0) { Write-Host 'Sign-in complete. NotchAgent will refresh automatically.'; Start-Sleep -Seconds 2 } else { Write-Host 'Sign-in failed or cancelled. Retry from NotchAgent.'; Start-Sleep -Seconds 8 }; exit $loginResult";
 
 /// The same sign-in, driven by a POSIX shell inside a terminal window. The CLI path
 /// travels in the environment here too, so a path with quotes in it is never parsed.
 #[cfg(not(windows))]
-const LOGIN_SH: &str = "echo 'Complete sign-in in your browser. Paste any code in this window.'; \"$CODENOTCH_CLAUDE_CLI\" auth login --claudeai; r=$?; if [ $r -eq 0 ]; then echo 'Sign-in complete. Codenotch will refresh automatically.'; sleep 2; else echo 'Sign-in failed or cancelled. Retry from Codenotch.'; sleep 8; fi; exit $r";
+const LOGIN_SH: &str = "echo 'Complete sign-in in your browser. Paste any code in this window.'; \"$CODENOTCH_CLAUDE_CLI\" auth login --claudeai; r=$?; if [ $r -eq 0 ]; then echo 'Sign-in complete. NotchAgent will refresh automatically.'; sleep 2; else echo 'Sign-in failed or cancelled. Retry from NotchAgent.'; sleep 8; fi; exit $r";
 
 /// A terminal emulator that can run a command, in the order a desktop is likely to have one.
 /// `-e` is understood by all of these; the Debian alternative comes first so the user's own

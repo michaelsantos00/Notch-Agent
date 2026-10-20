@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 final class CustomEndpointTests: XCTestCase {
     func testCustomEndpointDefaultValues() {

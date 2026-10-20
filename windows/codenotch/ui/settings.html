@@ -2,7 +2,7 @@
 <html class="booting">
 <head>
 <meta charset="UTF-8">
-<title>Codenotch Settings</title>
+<title>NotchAgent Settings</title>
 <style>
   /* The Mac's Settings (Sources/Settings/SettingsView.swift) over Windows 11's Mica: a sidebar card
      darker than the pane, grouped sections with captions as rows, and Windows' own control cues —
@@ -135,7 +135,7 @@
     <button class="row" id="tab-appearance" role="tab" aria-controls="pane-appearance" aria-selected="false" tabindex="-1"><span class="badge b-indigo"><svg viewBox="0 0 12 12"><path d="M10 .9a.8.8 0 0 1 1.1 1.1L6.4 6.7 5.3 5.6zM4.6 6.3l1.1 1.1c.2 1.9-1.9 3.6-4.7 3.1.9-.4 1.2-1 1.3-1.8.1-1.3 1.1-2.3 2.3-2.4z"/></svg></span><span>Appearance</span></button>
     <button class="row" id="tab-general" role="tab" aria-controls="pane-general" aria-selected="false" tabindex="-1"><span class="badge b-gray"><svg viewBox="0 0 12 12"><path fill-rule="evenodd" d="M5.1.6h1.8l.3 1.5 1.1.5 1.3-.8 1.3 1.3-.8 1.3.5 1.1 1.5.3v1.8l-1.5.3-.5 1.1.8 1.3-1.3 1.3-1.3-.8-1.1.5-.3 1.5H5.1l-.3-1.5-1.1-.5-1.3.8-1.3-1.3.8-1.3-.5-1.1L.6 6.9V5.1l1.5-.3.5-1.1-.8-1.3 1.3-1.3 1.3.8 1.1-.5zM6 4.1a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg></span><span>General</span></button>
     <div class="grow" data-tauri-drag-region></div>
-    <button class="row" id="quit"><span class="badge b-red"><svg viewBox="0 0 12 12"><path d="M6 1.2v4.3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M3.4 3.1a3.9 3.9 0 1 0 5.2 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span><span>Quit Codenotch</span></button>
+    <button class="row" id="quit"><span class="badge b-red"><svg viewBox="0 0 12 12"><path d="M6 1.2v4.3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M3.4 3.1a3.9 3.9 0 1 0 5.2 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span><span>Quit NotchAgent</span></button>
   </nav>
 
   <main id="pane">
@@ -161,7 +161,7 @@
           <div class="item"><span>Show</span><span class="seg" id="seg-show"><button data-v="show">Always show</button><button data-v="hover">Show on hover</button><button data-v="hide">Hide</button></span></div>
           <div class="item cap" id="cap-show" data-dynamic></div>
           <div class="item"><span>Adaptive pill</span><button class="switch" id="sw-adaptive" role="switch" aria-checked="false" aria-label="Adaptive pill"></button></div>
-          <div class="item cap">While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.</div>
+          <div class="item cap">While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.</div>
           <div class="item"><span>Size</span><span class="seg" id="seg-size"><button data-v="0.8">Small</button><button data-v="1">Medium</button><button data-v="1.25">Large</button></span></div>
           <div class="item cap" id="cap-size" data-dynamic></div>
           <div class="item"><span>Theme</span><span class="seg" id="seg-theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></span></div>
@@ -206,21 +206,21 @@
               <option value="uk">Українська</option>
             </select>
           </div>
-          <div class="item cap">Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.</div>
+          <div class="item cap">Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.</div>
         </div>
       </section>
 
       <section class="pane" id="pane-general" role="tabpanel" aria-labelledby="tab-general" hidden>
         <div class="group">
-          <div class="item"><span>Open Codenotch at login</span><button class="switch" id="sw-autostart" role="switch" aria-checked="false" aria-label="Open Codenotch at login"></button></div>
-          <div class="item cap">Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.</div>
+          <div class="item"><span>Open NotchAgent at login</span><button class="switch" id="sw-autostart" role="switch" aria-checked="false" aria-label="Open NotchAgent at login"></button></div>
+          <div class="item cap">NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.</div>
           <div class="item"><span>Version</span><span class="value" id="about-version" data-dynamic>0.3.0</span></div>
           <div class="item"><span>Updates</span><span class="value" id="update-status" data-dynamic></span><button class="btn" id="btn-update" data-dynamic>Check for updates</button></div>
-          <div class="item cap">Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.</div>
+          <div class="item cap">NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.</div>
         </div>
         <div class="group">
           <div class="item"><span>Data folder</span><button class="btn" id="btn-data">Open folder</button></div>
-          <div class="item cap">Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.</div>
+          <div class="item cap">Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.</div>
         </div>
         <div class="group">
           <div class="item cap"><span>App designed and developed by</span> <button class="link" id="author">@hivinz_</button></div>
@@ -234,7 +234,7 @@
 
 <script>
 /* ---------------------------------------------------------------------------
-   Codenotch settings: the Mac's three panes — Accounts, Appearance, General.
+   NotchAgent settings: the Mac's three panes — Accounts, Appearance, General.
 
    Every value on screen comes from a Rust command and is written back by one.
    Every call is wrapped so a failure paints the strip under the title instead
@@ -288,13 +288,13 @@ const PT_BR_STATIC = {
   'Up to date':'Atualizado',
   'Could not check for updates':'Não foi possível verificar atualizações',
   'Could not install the update':'Não foi possível instalar a atualização',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'O Codenotch procura novas versões para Windows pouco depois de iniciar. Atualizações assinadas são instaladas aqui; caso contrário, baixe e execute o instalador oficial do GitHub.',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'O NotchAgent procura novas versões para Windows pouco depois de iniciar. Atualizações assinadas são instaladas aqui; caso contrário, baixe e execute o instalador oficial do GitHub.',
   'Settings sections':'Seções das configurações',
   'Close':'Fechar',
   'Accounts':'Contas',
   'Appearance':'Aparência',
   'General':'Geral',
-  'Quit Codenotch':'Encerrar o Codenotch',
+  'Quit NotchAgent':'Encerrar o NotchAgent',
   'Connected':'Conectado',
   'Not connected':'Não conectado',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'Estes não têm anel para posicionar. Ative um e ele entra no fim da lista acima.',
@@ -307,8 +307,8 @@ const PT_BR_STATIC = {
   'Weekly Limit':'Limite semanal',
   'Gemini Models':'Modelos Gemini',
   'Claude and GPT models':'Modelos Claude e GPT',
-  'Let Claude Code notify Codenotch':'Permitir que o Claude Code notifique o Codenotch',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'Ao ativar esta opção, algumas linhas são adicionadas ao arquivo de configurações do Claude Code para que ele envie uma mensagem curta ao Codenotch quando uma sessão começa, quando está trabalhando, quando aguarda sua resposta e quando termina. Isso faz o anel girar e o anel âmbar pulsar.',
+  'Let Claude Code notify NotchAgent':'Permitir que o Claude Code notifique o NotchAgent',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'Ao ativar esta opção, algumas linhas são adicionadas ao arquivo de configurações do Claude Code para que ele envie uma mensagem curta ao NotchAgent quando uma sessão começa, quando está trabalhando, quando aguarda sua resposta e quando termina. Isso faz o anel girar e o anel âmbar pulsar.',
   'Notch':'Notch',
   'Show':'Exibição',
   'Always show':'Sempre exibir',
@@ -331,9 +331,9 @@ const PT_BR_STATIC = {
   'Show on hover':'Exibir ao passar o cursor',
   'A small pill at the screen edge that opens when you reach it.':'Uma pequena cápsula na borda da tela que abre quando você chega nela.',
   'Adaptive pill':'Cápsula adaptável',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'Com o notch recolhido, a cápsula acompanha o que está atrás dela: clara sobre um fundo escuro, preta sobre um claro, para continuar fácil de achar. Para isso, o Codenotch lê duas vezes por segundo uma faixa estreita da tela ao lado da cápsula e guarda só o brilho médio dela.',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'Com o notch recolhido, a cápsula acompanha o que está atrás dela: clara sobre um fundo escuro, preta sobre um claro, para continuar fácil de achar. Para isso, o NotchAgent lê duas vezes por segundo uma faixa estreita da tela ao lado da cápsula e guarda só o brilho médio dela.',
   'The notch stays open with every reading visible.':'O notch fica aberto com todas as leituras visíveis.',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'A cápsula preta na borda direita da tela, com um anel para cada ferramenta. Ao desativá-la, a cápsula desaparece; o Codenotch continua contabilizando seu uso de qualquer forma.',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'A cápsula preta na borda direita da tela, com um anel para cada ferramenta. Ao desativá-la, a cápsula desaparece; o NotchAgent continua contabilizando seu uso de qualquer forma.',
   'Recentre':'Recentralizar',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Segure Alt e arraste o notch para movê-lo ao longo da borda. Cada borda lembra onde você o deixou. Recentralizar o coloca novamente no meio da borda atual ou na borda direita da tela principal se a tela anterior tiver sido desconectada.',
   'Edge':'Borda',
@@ -356,21 +356,21 @@ const PT_BR_STATIC = {
   'App icon':'Ícone do app',
   'System tray':'Bandeja do sistema',
   'Neither':'Nenhum',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'O pequeno ícone próximo ao relógio. Clique com o botão direito para abrir esta janela, atualizar as leituras ou sair do Codenotch.',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'Nenhum ícone na bandeja do sistema. Abra o Codenotch novamente pelo menu Iniciar para acessar estas configurações.',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'Mantido ativado: o notch está oculto, então este ícone é a única forma de acessar o Codenotch. Ative o notch primeiro se quiser ocultar o ícone.',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'O ícone da barra de tarefas foi mantido ativado. Com o notch oculto, ele é a única forma de abrir esta janela ou sair do Codenotch; por isso, os dois não podem ser desativados ao mesmo tempo.',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'O pequeno ícone próximo ao relógio. Clique com o botão direito para abrir esta janela, atualizar as leituras ou sair do NotchAgent.',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'Nenhum ícone na bandeja do sistema. Abra o NotchAgent novamente pelo menu Iniciar para acessar estas configurações.',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'Mantido ativado: o notch está oculto, então este ícone é a única forma de acessar o NotchAgent. Ative o notch primeiro se quiser ocultar o ícone.',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'O ícone da barra de tarefas foi mantido ativado. Com o notch oculto, ele é a única forma de abrir esta janela ou sair do NotchAgent; por isso, os dois não podem ser desativados ao mesmo tempo.',
   'Language':'Idioma',
   'Follow system':'Seguir o sistema',
   'English':'English',
   'Русский':'Русский',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'Define o idioma usado pelo Codenotch. “Seguir o sistema” usa o idioma configurado no próprio Windows.',
-  'Open Codenotch at login':'Abrir o Codenotch ao iniciar a sessão',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'O Codenotch abre automaticamente sempre que você entra neste computador e permanece em segundo plano até uma sessão de programação começar. Se desativar esta opção, será necessário abrir o Codenotch manualmente.',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'Define o idioma usado pelo NotchAgent. “Seguir o sistema” usa o idioma configurado no próprio Windows.',
+  'Open NotchAgent at login':'Abrir o NotchAgent ao iniciar a sessão',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'O NotchAgent abre automaticamente sempre que você entra neste computador e permanece em segundo plano até uma sessão de programação começar. Se desativar esta opção, será necessário abrir o NotchAgent manualmente.',
   'Version':'Versão',
   'Data folder':'Pasta de dados',
   'Open folder':'Abrir pasta',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Tudo o que o Codenotch armazena fica em uma única pasta: suas configurações, o arquivo de log e a pasta "glyphs", onde você pode colocar seus próprios ícones. Abre no Explorador de Arquivos.',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Tudo o que o NotchAgent armazena fica em uma única pasta: suas configurações, o arquivo de log e a pasta "glyphs", onde você pode colocar seus próprios ícones. Abre no Explorador de Arquivos.',
   'App designed and developed by':'App projetado e desenvolvido por',
   'Saved':'Salvo'
 };
@@ -401,17 +401,17 @@ const RU_STATIC = {
   'Up to date':'Актуальная версия',
   'Could not check for updates':'Не удалось проверить обновления',
   'Could not install the update':'Не удалось установить обновление',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'Codenotch проверяет новые версии для Windows вскоре после запуска. Подписанные обновления устанавливаются здесь; иначе скачайте и запустите официальный установщик с GitHub.',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'NotchAgent проверяет новые версии для Windows вскоре после запуска. Подписанные обновления устанавливаются здесь; иначе скачайте и запустите официальный установщик с GitHub.',
   'Settings sections':'Разделы настроек', 'Close':'Закрыть',
-  'Accounts':'Аккаунты', 'Appearance':'Внешний вид', 'General':'Общие', 'Quit Codenotch':'Выйти из Codenotch',
+  'Accounts':'Аккаунты', 'Appearance':'Внешний вид', 'General':'Общие', 'Quit NotchAgent':'Выйти из NotchAgent',
   'Connected':'Подключён', 'Not connected':'Не подключён',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'У этих провайдеров нет кольца. Включите один, и он добавится в конец списка выше.',
   'One provider always stays ticked, so the pill is never empty.':'Хотя бы один провайдер всегда выбран, поэтому панель не бывает пустой.',
   'At least one provider stays on the notch':'На панели должен остаться хотя бы один провайдер',
   'Notch reads':'Показания панели', 'Model data':'Данные модели', 'Automatic':'Автоматически', '5-Hour Limit':'Лимит на 5 часов', 'Weekly Limit':'Недельный лимит',
   'Gemini Models':'Модели Gemini', 'Claude and GPT models':'Модели Claude и GPT',
-  'Let Claude Code notify Codenotch':'Разрешить Claude Code уведомлять Codenotch',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'При включении в файл настроек Claude Code добавляются строки, чтобы он сообщал Codenotch о начале работы, процессе, ожидании ответа и завершении сеанса. Благодаря этому кольцо вращается, а янтарное кольцо пульсирует.',
+  'Let Claude Code notify NotchAgent':'Разрешить Claude Code уведомлять NotchAgent',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'При включении в файл настроек Claude Code добавляются строки, чтобы он сообщал NotchAgent о начале работы, процессе, ожидании ответа и завершении сеанса. Благодаря этому кольцо вращается, а янтарное кольцо пульсирует.',
   'Notch':'Панель', 'Show':'Показывать', 'Always show':'Всегда показывать', 'Hide':'Скрыть',
   'Size':'Размер', 'Small':'Маленький', 'Medium':'Средний', 'Large':'Большой',
   'Takes the least room on the edge. Readable, but not from across the desk.':'Занимает минимум места у края. Читается вблизи, но не издалека.',
@@ -425,9 +425,9 @@ const RU_STATIC = {
   'Show on hover':'Показывать при наведении',
   'A small pill at the screen edge that opens when you reach it.':'Небольшая панель у края экрана, которая открывается при наведении.',
   'Adaptive pill':'Адаптивная свёрнутая панель',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'Когда панель свёрнута, она подстраивается под фон: светлая на тёмном, чёрная на светлом, чтобы её было легко найти. Для этого Codenotch дважды в секунду считывает узкую полоску экрана рядом с ней и сохраняет только её среднюю яркость.',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'Когда панель свёрнута, она подстраивается под фон: светлая на тёмном, чёрная на светлом, чтобы её было легко найти. Для этого NotchAgent дважды в секунду считывает узкую полоску экрана рядом с ней и сохраняет только её среднюю яркость.',
   'The notch stays open with every reading visible.':'Выемка остаётся открытой, и все данные видны.',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'Чёрная панель у правого края экрана с отдельным кольцом для каждого инструмента. При выключении панель исчезает, но Codenotch продолжает считать использование.',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'Чёрная панель у правого края экрана с отдельным кольцом для каждого инструмента. При выключении панель исчезает, но NotchAgent продолжает считать использование.',
   'Recentre':'По центру',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Удерживайте Alt и перетаскивайте панель вдоль края. Для каждого края запоминается последнее положение. Кнопка «По центру» возвращает её на середину текущего края или на правый край главного экрана, если монитор, на котором она находилась, был отключен.',
   'Edge':'Край', 'Left':'Слева', 'Right':'Справа', 'Top':'Сверху', 'Bottom':'Снизу',
@@ -442,16 +442,16 @@ const RU_STATIC = {
   'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'Дуга над панелью. Зажмите её, чтобы перенести панель к другому краю, — то же делает настройка «Край» выше.',
   'The notch is back in the middle':'Панель возвращена в центр',
   'App':'Приложение', 'App icon':'Значок приложения', 'System tray':'Системный трей', 'Neither':'Ни то ни другое',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'Небольшой значок рядом с часами. Щелчок правой кнопкой открывает это окно, обновляет данные или завершает работу Codenotch.',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'Значка в системном трее нет. Откройте Codenotch снова из меню «Пуск», чтобы вернуть эти настройки.',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'Оставлен включённым: панель скрыта, поэтому этот значок — единственный способ открыть Codenotch. Сначала включите панель, если хотите скрыть значок.',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'Значок в панели задач оставлен включённым. При скрытой панели это единственный способ открыть окно или завершить работу Codenotch, поэтому оба элемента нельзя выключить одновременно.',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'Небольшой значок рядом с часами. Щелчок правой кнопкой открывает это окно, обновляет данные или завершает работу NotchAgent.',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'Значка в системном трее нет. Откройте NotchAgent снова из меню «Пуск», чтобы вернуть эти настройки.',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'Оставлен включённым: панель скрыта, поэтому этот значок — единственный способ открыть NotchAgent. Сначала включите панель, если хотите скрыть значок.',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'Значок в панели задач оставлен включённым. При скрытой панели это единственный способ открыть окно или завершить работу NotchAgent, поэтому оба элемента нельзя выключить одновременно.',
   'Language':'Язык', 'Follow system':'Как в системе', 'English':'English', 'Русский':'Русский',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'Задаёт язык Codenotch. Вариант «Как в системе» использует язык Windows.',
-  'Open Codenotch at login':'Открывать Codenotch при входе',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'Codenotch запускается при входе в систему и тихо работает в фоне до начала сеанса разработки. Если выключить эту настройку, Codenotch нужно запускать вручную.',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'Задаёт язык NotchAgent. Вариант «Как в системе» использует язык Windows.',
+  'Open NotchAgent at login':'Открывать NotchAgent при входе',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'NotchAgent запускается при входе в систему и тихо работает в фоне до начала сеанса разработки. Если выключить эту настройку, NotchAgent нужно запускать вручную.',
   'Version':'Версия', 'Data folder':'Папка данных', 'Open folder':'Открыть папку',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Все данные Codenotch хранятся в одной папке: настройки, журнал и папка «glyphs» для собственных значков. Открывается в Проводнике.',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Все данные NotchAgent хранятся в одной папке: настройки, журнал и папка «glyphs» для собственных значков. Открывается в Проводнике.',
   'App designed and developed by':'Приложение разработал', 'Saved':'Сохранено'
 };
 const ZH_STATIC = {
@@ -481,12 +481,12 @@ const ZH_STATIC = {
   'Up to date':'已是最新版本',
   'Could not check for updates':'无法检查更新',
   'Could not install the update':'无法安装更新',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'Codenotch 启动后会检查新的 Windows 版本。已签名的更新可在此安装；否则请从 GitHub 下载并运行官方安装程序。',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'NotchAgent 启动后会检查新的 Windows 版本。已签名的更新可在此安装；否则请从 GitHub 下载并运行官方安装程序。',
   'Settings sections':'设置部分',
   'Accounts':'账号',
   'Appearance':'外观',
   'General':'通用',
-  'Quit Codenotch':'退出 Codenotch',
+  'Quit NotchAgent':'退出 NotchAgent',
   'Connected':'已连接',
   'Not connected':'未连接',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'这些没有圆环可放。打开其中一个，它会接到上面列表的末尾。',
@@ -498,8 +498,8 @@ const ZH_STATIC = {
   'Weekly Limit':'每周额度',
   'Gemini Models':'Gemini 模型',
   'Claude and GPT models':'Claude 和 GPT 模型',
-  'Let Claude Code notify Codenotch':'允许 Claude Code 通知 Codenotch',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'开启此选项会在你的 Claude Code 设置文件中添加几行代码，以便 Claude Code 在会话开始、处理中、等待你回答以及完成时向 Codenotch 发送简短消息。这就是圆环旋转和琥珀色圆环闪烁的原因。',
+  'Let Claude Code notify NotchAgent':'允许 Claude Code 通知 NotchAgent',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'开启此选项会在你的 Claude Code 设置文件中添加几行代码，以便 Claude Code 在会话开始、处理中、等待你回答以及完成时向 NotchAgent 发送简短消息。这就是圆环旋转和琥珀色圆环闪烁的原因。',
   'Notch':'刘海',
   'Show':'显示',
   'Always show':'始终显示',
@@ -522,32 +522,32 @@ const ZH_STATIC = {
   'Show on hover':'悬停时显示',
   'A small pill at the screen edge that opens when you reach it.':'屏幕边缘一颗小胶囊，指针移过去就会展开。',
   'Adaptive pill':'自适应胶囊',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'刘海收起时，胶囊会随背后的内容变化：深色背景上变浅，浅色背景上变黑，方便找到。为此，Codenotch 每秒读取两次胶囊旁边一条窄窄的屏幕区域，只保留它的平均亮度。',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'刘海收起时，胶囊会随背后的内容变化：深色背景上变浅，浅色背景上变黑，方便找到。为此，NotchAgent 每秒读取两次胶囊旁边一条窄窄的屏幕区域，只保留它的平均亮度。',
   'The notch stays open with every reading visible.':'刘海保持展开，所有读数都看得见。',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'屏幕右侧边缘的黑色胶囊，每个工具对应一个圆环。关闭它后胶囊会消失；无论哪种情况，Codenotch 都会继续统计你的使用情况。',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'屏幕右侧边缘的黑色胶囊，每个工具对应一个圆环。关闭它后胶囊会消失；无论哪种情况，NotchAgent 都会继续统计你的使用情况。',
   'Recentre':'重新居中',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'按住 Alt 拖动刘海，沿边缘滑动。每条边都会记住你放的位置。“重新居中”操作会将其放回当前所在边缘的中间；如果它所在的屏幕已被断开连接，则会将其放回主屏幕的右侧边缘。',
   'The notch is back in the middle':'刘海已回到中间',
   'App':'应用',
   'App icon':'应用图标',
   'Neither':'都不显示',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'时钟旁边的小图标。右键点击它可打开此窗口、刷新读数或退出 Codenotch。',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'强制开启：刘海已被隐藏，因此该图标是访问 Codenotch 的唯一方式。如果你想隐藏此图标，请先重新开启刘海。',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'任务栏图标已保持开启。在刘海隐藏的情况下，它是打开此窗口或退出 Codenotch 的唯一方式，因此 Codenotch 不允许同时关闭两者。',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'时钟旁边的小图标。右键点击它可打开此窗口、刷新读数或退出 NotchAgent。',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'强制开启：刘海已被隐藏，因此该图标是访问 NotchAgent 的唯一方式。如果你想隐藏此图标，请先重新开启刘海。',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'任务栏图标已保持开启。在刘海隐藏的情况下，它是打开此窗口或退出 NotchAgent 的唯一方式，因此 NotchAgent 不允许同时关闭两者。',
   'Language':'语言',
   'Follow system':'跟随系统',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'设置 Codenotch 使用的语言。“跟随系统”会使用 Windows 系统的默认语言设置。',
-  'Open Codenotch at login':'登录时打开 Codenotch',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'每次登录此计算机时，Codenotch 都会自动打开，并在后台静默等待，直到编码会话开始。关闭此选项后，你需要手动打开 Codenotch。',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'设置 NotchAgent 使用的语言。“跟随系统”会使用 Windows 系统的默认语言设置。',
+  'Open NotchAgent at login':'登录时打开 NotchAgent',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'每次登录此计算机时，NotchAgent 都会自动打开，并在后台静默等待，直到编码会话开始。关闭此选项后，你需要手动打开 NotchAgent。',
   'Version':'版本',
   'Data folder':'数据文件夹',
   'Open folder':'打开文件夹',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Codenotch 记住的所有内容都保存在一个文件夹中：你的设置、它的日志文件，以及你可以在其中放入自定义图标的“glyphs”文件夹。在文件资源管理器中打开。',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'NotchAgent 记住的所有内容都保存在一个文件夹中：你的设置、它的日志文件，以及你可以在其中放入自定义图标的“glyphs”文件夹。在文件资源管理器中打开。',
   'App designed and developed by':'应用设计与开发',
   'Saved':'已保存',
   'System tray':'系统托盘',
   'Close':'关闭',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'系统托盘中无图标。请从“开始”菜单再次打开 Codenotch 以恢复这些设置。',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'系统托盘中无图标。请从“开始”菜单再次打开 NotchAgent 以恢复这些设置。',
   'Model data':'模型数据',
   'Show move handle':'显示移动手柄',
   'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'刘海上的弧。按住它可以把刘海拖到另一条边 — 上面的「边缘」也一样。',
@@ -592,12 +592,12 @@ const ZH_HANT_STATIC = {
   'Up to date':'已是最新版本',
   'Could not check for updates':'無法檢查更新',
   'Could not install the update':'無法安裝更新',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'Codenotch 啟動後會檢查新的 Windows 版本。已簽署的更新可在此安裝；否則請從 GitHub 下載並執行官方安裝程式。',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'NotchAgent 啟動後會檢查新的 Windows 版本。已簽署的更新可在此安裝；否則請從 GitHub 下載並執行官方安裝程式。',
   'Settings sections':'設定部分',
   'Accounts':'帳號',
   'Appearance':'外觀',
   'General':'一般',
-  'Quit Codenotch':'結束 Codenotch',
+  'Quit NotchAgent':'結束 NotchAgent',
   'Connected':'已連線',
   'Not connected':'未連線',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'這些沒有圓環可放。開啟其中一個，它會接到上面列表的末尾。',
@@ -609,8 +609,8 @@ const ZH_HANT_STATIC = {
   'Weekly Limit':'每週額度',
   'Gemini Models':'Gemini 模型',
   'Claude and GPT models':'Claude 和 GPT 模型',
-  'Let Claude Code notify Codenotch':'允許 Claude Code 通知 Codenotch',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'開啟此選項會在你的 Claude Code 設定檔中加入幾行程式碼，以便 Claude Code 在工作階段開始、處理中、等待你回答以及完成時向 Codenotch 傳送簡短訊息。這就是圓環旋轉和琥珀色圓環閃爍的原因。',
+  'Let Claude Code notify NotchAgent':'允許 Claude Code 通知 NotchAgent',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'開啟此選項會在你的 Claude Code 設定檔中加入幾行程式碼，以便 Claude Code 在工作階段開始、處理中、等待你回答以及完成時向 NotchAgent 傳送簡短訊息。這就是圓環旋轉和琥珀色圓環閃爍的原因。',
   'Notch':'瀏海',
   'Show':'顯示',
   'Always show':'始終顯示',
@@ -633,32 +633,32 @@ const ZH_HANT_STATIC = {
   'Show on hover':'懸停時顯示',
   'A small pill at the screen edge that opens when you reach it.':'螢幕邊緣一顆小膠囊，游標移過去就會展開。',
   'Adaptive pill':'自適應膠囊',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'瀏海收起時，膠囊會隨背後的內容變化：深色背景上變淺，淺色背景上變黑，方便找到。為此，Codenotch 每秒讀取兩次膠囊旁邊一條窄窄的螢幕區域，只保留它的平均亮度。',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'瀏海收起時，膠囊會隨背後的內容變化：深色背景上變淺，淺色背景上變黑，方便找到。為此，NotchAgent 每秒讀取兩次膠囊旁邊一條窄窄的螢幕區域，只保留它的平均亮度。',
   'The notch stays open with every reading visible.':'瀏海保持展開，所有讀數都看得見。',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'螢幕右側邊緣的黑色膠囊，每個工具對應一個圓環。關閉它後膠囊會消失；無論哪種情況，Codenotch 都會繼續統計你的使用情況。',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'螢幕右側邊緣的黑色膠囊，每個工具對應一個圓環。關閉它後膠囊會消失；無論哪種情況，NotchAgent 都會繼續統計你的使用情況。',
   'Recentre':'重新置中',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'按住 Alt 拖動瀏海，沿邊緣滑動。每條邊都會記住你放的位置。「重新置中」會將它放回目前所在邊緣的中間；如果它所在的螢幕已拔除，則會放回主螢幕的右側邊緣。',
   'The notch is back in the middle':'瀏海已回到中間',
   'App':'App',
   'App icon':'App 圖示',
   'Neither':'都不顯示',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'時鐘旁邊的小圖示。在它上面按右鍵可開啟此視窗、重新整理讀數或結束 Codenotch。',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'強制開啟：瀏海已被隱藏，因此該圖示是前往 Codenotch 的唯一方式。如果你想隱藏此圖示，請先重新開啟瀏海。',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'工作列圖示已保持開啟。在瀏海隱藏的情況下，它是開啟此視窗或結束 Codenotch 的唯一方式，因此 Codenotch 不允許同時關閉兩者。',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'時鐘旁邊的小圖示。在它上面按右鍵可開啟此視窗、重新整理讀數或結束 NotchAgent。',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'強制開啟：瀏海已被隱藏，因此該圖示是前往 NotchAgent 的唯一方式。如果你想隱藏此圖示，請先重新開啟瀏海。',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'工作列圖示已保持開啟。在瀏海隱藏的情況下，它是開啟此視窗或結束 NotchAgent 的唯一方式，因此 NotchAgent 不允許同時關閉兩者。',
   'Language':'語言',
   'Follow system':'跟隨系統',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'設定 Codenotch 使用的語言。「跟隨系統」會使用 Windows 本身的語言設定。',
-  'Open Codenotch at login':'登入時開啟 Codenotch',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'每次登入這部電腦時，Codenotch 都會自動開啟，並在背景靜默等待，直到編碼工作階段開始。關閉此選項後，你需要手動開啟 Codenotch。',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'設定 NotchAgent 使用的語言。「跟隨系統」會使用 Windows 本身的語言設定。',
+  'Open NotchAgent at login':'登入時開啟 NotchAgent',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'每次登入這部電腦時，NotchAgent 都會自動開啟，並在背景靜默等待，直到編碼工作階段開始。關閉此選項後，你需要手動開啟 NotchAgent。',
   'Version':'版本',
   'Data folder':'資料資料夾',
   'Open folder':'開啟資料夾',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Codenotch 記住的所有內容都儲存在一個資料夾中：你的設定、它的日誌檔，以及你可以放入自訂圖示的「glyphs」資料夾。在檔案總管中開啟。',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'NotchAgent 記住的所有內容都儲存在一個資料夾中：你的設定、它的日誌檔，以及你可以放入自訂圖示的「glyphs」資料夾。在檔案總管中開啟。',
   'App designed and developed by':'App 設計與開發',
   'Saved':'已儲存',
   'System tray':'系統匣',
   'Close':'關閉',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'系統匣中無圖示。請從「開始」功能表再次開啟 Codenotch 以還原這些設定。',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'系統匣中無圖示。請從「開始」功能表再次開啟 NotchAgent 以還原這些設定。',
   'Model data':'模型資料',
   'Show move handle':'顯示移動手柄',
   'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'瀏海上的弧。按住它可以把瀏海拖到另一條邊 — 上面的「邊緣」也一樣。',
@@ -703,14 +703,14 @@ const JA_STATIC = {
   'Up to date':'最新の状態です',
   'Could not check for updates':'アップデートを確認できませんでした',
   'Could not install the update':'アップデートをインストールできませんでした',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'Codenotch は起動後まもなく新しい Windows 版を確認します。署名済みの更新はここからインストールできます。それ以外は GitHub から公式インストーラーをダウンロードして実行してください。',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'NotchAgent は起動後まもなく新しい Windows 版を確認します。署名済みの更新はここからインストールできます。それ以外は GitHub から公式インストーラーをダウンロードして実行してください。',
   'Show move handle':'移動ハンドルを表示',
   'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'ノッチの上にある弧です。長押しすると、ノッチを別の辺へ運べます。上の「配置する辺」でも同じことができます。',
   'Settings sections':'設定セクション',
   'Accounts':'アカウント',
   'Appearance':'外観',
   'General':'一般',
-  'Quit Codenotch':'Codenotch を終了',
+  'Quit NotchAgent':'NotchAgent を終了',
   'Connected':'接続済み',
   'Not connected':'未接続',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'これらには配置するリングがありません。オンにすると、上の一覧の末尾に加わります。',
@@ -722,8 +722,8 @@ const JA_STATIC = {
   'Weekly Limit':'週間の上限',
   'Gemini Models':'Gemini モデル',
   'Claude and GPT models':'Claude と GPT のモデル',
-  'Let Claude Code notify Codenotch':'Claude Code から Codenotch に通知を送信する',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'これをオンにすると、Claude Code の設定ファイルに数行が追加され、セッションの開始時、処理中、回答の待機中、および終了時に Claude Code が Codenotch に短いメッセージを送信するようになります。これにより、リングが回転したり、琥珀色のリングが点滅したりします。',
+  'Let Claude Code notify NotchAgent':'Claude Code から NotchAgent に通知を送信する',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'これをオンにすると、Claude Code の設定ファイルに数行が追加され、セッションの開始時、処理中、回答の待機中、および終了時に Claude Code が NotchAgent に短いメッセージを送信するようになります。これにより、リングが回転したり、琥珀色のリングが点滅したりします。',
   'Notch':'ノッチ',
   'Show':'表示',
   'Always show':'常に表示',
@@ -746,32 +746,32 @@ const JA_STATIC = {
   'Show on hover':'ホバー時に表示',
   'A small pill at the screen edge that opens when you reach it.':'画面の端に小さなピル。ポインタを近づけると開きます。',
   'Adaptive pill':'ピルの色を自動調整',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'ノッチが折りたたまれている間、ピルは背後の色に合わせて変わります。暗い背景では明るく、明るい背景では黒くなるので、見つけやすくなります。そのために Codenotch は、ピルの横にある画面の細い帯を1秒に2回読み取り、平均の明るさだけを残します。',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'ノッチが折りたたまれている間、ピルは背後の色に合わせて変わります。暗い背景では明るく、明るい背景では黒くなるので、見つけやすくなります。そのために NotchAgent は、ピルの横にある画面の細い帯を1秒に2回読み取り、平均の明るさだけを残します。',
   'The notch stays open with every reading visible.':'ノッチは開いたままで、すべての読み取りが見えます。',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'画面の右端にある黒いピルには、ツールごとに1つのリングが表示されます。オフにするとピルは消えますが、どちらにしても Codenotch は使用量のカウントを続けます。',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'画面の右端にある黒いピルには、ツールごとに1つのリングが表示されます。オフにするとピルは消えますが、どちらにしても NotchAgent は使用量のカウントを続けます。',
   'Recentre':'中央に戻す',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Alt を押しながらノッチをドラッグすると、辺に沿って動かせます。位置は辺ごとに記憶されます。「中央に戻す」を使うと、現在配置されている端の中央に戻ります。もし配置されていた画面が取り外されている場合は、メイン画面の右端に戻ります。',
   'The notch is back in the middle':'ノッチが中央に戻りました',
   'App':'アプリ',
   'App icon':'アプリアイコン',
   'Neither':'どちらにも出さない',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'時計のそばにある小さなアイコンです。右クリックするとこのウィンドウを開いたり、読み取りを更新したり、Codenotch を終了したりできます。',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'保持オン: ノッチが非表示になっているため、Codenotch にアクセスできるのはこのアイコンだけです。このアイコンを非表示にしたい場合は、先にノッチをオンに戻してください。',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'タスクバーアイコンはオンのままです。ノッチが非表示の場合、このウィンドウを開いたり Codenotch を終了したりする唯一の手段となるため、Codenotch は両方を同時にオフにすることを許可しません。',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'時計のそばにある小さなアイコンです。右クリックするとこのウィンドウを開いたり、読み取りを更新したり、NotchAgent を終了したりできます。',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'保持オン: ノッチが非表示になっているため、NotchAgent にアクセスできるのはこのアイコンだけです。このアイコンを非表示にしたい場合は、先にノッチをオンに戻してください。',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'タスクバーアイコンはオンのままです。ノッチが非表示の場合、このウィンドウを開いたり NotchAgent を終了したりする唯一の手段となるため、NotchAgent は両方を同時にオフにすることを許可しません。',
   'Language':'言語',
   'Follow system':'システムに従う',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'Codenotch で使用する言語を設定します。「システムに従う」は、Windows 自体に設定されている言語を使用します。',
-  'Open Codenotch at login':'ログイン時に Codenotch を開く',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'このコンピューターにサインインするたびに Codenotch が自動的に開き、コーディングセッションが始まるまでバックグラウンドで静かに待機します。オフにすると、Codenotch を手動で開く必要があります。',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'NotchAgent で使用する言語を設定します。「システムに従う」は、Windows 自体に設定されている言語を使用します。',
+  'Open NotchAgent at login':'ログイン時に NotchAgent を開く',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'このコンピューターにサインインするたびに NotchAgent が自動的に開き、コーディングセッションが始まるまでバックグラウンドで静かに待機します。オフにすると、NotchAgent を手動で開く必要があります。',
   'Version':'バージョン',
   'Data folder':'データフォルダー',
   'Open folder':'フォルダーを開く',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Codenotch が記憶するすべてのデータは1つのフォルダーに保存されます。設定、ログファイル、そして独自のアイコンをドロップできる「glyphs」フォルダーです。エクスプローラーで開きます。',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'NotchAgent が記憶するすべてのデータは1つのフォルダーに保存されます。設定、ログファイル、そして独自のアイコンをドロップできる「glyphs」フォルダーです。エクスプローラーで開きます。',
   'App designed and developed by':'デザインと開発',
   'Saved':'保存しました',
   'System tray':'システムトレイ',
   'Close':'閉じる',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'システムトレイにアイコンを表示しません。これらの設定に戻るには、スタートメニューから Codenotch をもう一度開いてください。',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'システムトレイにアイコンを表示しません。これらの設定に戻るには、スタートメニューから NotchAgent をもう一度開いてください。',
   'Model data':'モデルのデータ'
 };
 const KO_STATIC = {
@@ -801,12 +801,12 @@ const KO_STATIC = {
   'Up to date':'최신 버전입니다',
   'Could not check for updates':'업데이트를 확인할 수 없습니다',
   'Could not install the update':'업데이트를 설치할 수 없습니다',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'Codenotch는 시작 직후 새 Windows 버전을 확인합니다. 서명된 업데이트는 여기서 설치할 수 있으며, 그렇지 않으면 GitHub에서 공식 설치 프로그램을 다운로드해 실행하세요.',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'NotchAgent는 시작 직후 새 Windows 버전을 확인합니다. 서명된 업데이트는 여기서 설치할 수 있으며, 그렇지 않으면 GitHub에서 공식 설치 프로그램을 다운로드해 실행하세요.',
   'Settings sections':'설정 섹션',
   'Accounts':'계정',
   'Appearance':'모양',
   'General':'일반',
-  'Quit Codenotch':'Codenotch 종료',
+  'Quit NotchAgent':'NotchAgent 종료',
   'Connected':'연결됨',
   'Not connected':'연결되지 않음',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'이 항목들은 아직 표시할 링이 없습니다. 켜면 위 목록의 끝에 추가됩니다.',
@@ -818,8 +818,8 @@ const KO_STATIC = {
   'Weekly Limit':'주간 제한',
   'Gemini Models':'Gemini 모델',
   'Claude and GPT models':'Claude 및 GPT 모델',
-  'Let Claude Code notify Codenotch':'Claude Code가 Codenotch에 알리도록 허용',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'이것을 켜면 Claude Code 설정 파일에 몇 줄이 추가되어 세션이 시작될 때, 작업 중일 때, 사용자의 응답을 기다릴 때, 그리고 완료될 때 Claude Code가 Codenotch에 짧은 메시지를 보냅니다. 이것이 링을 회전하게 하고 주황색 링을 깜박이게 하는 원리입니다.',
+  'Let Claude Code notify NotchAgent':'Claude Code가 NotchAgent에 알리도록 허용',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'이것을 켜면 Claude Code 설정 파일에 몇 줄이 추가되어 세션이 시작될 때, 작업 중일 때, 사용자의 응답을 기다릴 때, 그리고 완료될 때 Claude Code가 NotchAgent에 짧은 메시지를 보냅니다. 이것이 링을 회전하게 하고 주황색 링을 깜박이게 하는 원리입니다.',
   'Notch':'노치',
   'Show':'표시',
   'Always show':'항상 표시',
@@ -842,7 +842,7 @@ const KO_STATIC = {
   'Show on hover':'마우스를 올리면 표시',
   'A small pill at the screen edge that opens when you reach it.':'화면 가장자리의 작은 필에 포인터를 가져가면 펼쳐집니다.',
   'Adaptive pill':'적응형 필',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'노치가 접혀 있는 동안 필은 뒤의 배경에 맞춰 바뀝니다. 어두운 배경에서는 밝게, 밝은 배경에서는 검게 바뀌어 쉽게 찾을 수 있습니다. 이를 위해 Codenotch는 필 옆의 좁은 화면 영역을 1초에 두 번 읽고 평균 밝기만 남깁니다.',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'노치가 접혀 있는 동안 필은 뒤의 배경에 맞춰 바뀝니다. 어두운 배경에서는 밝게, 밝은 배경에서는 검게 바뀌어 쉽게 찾을 수 있습니다. 이를 위해 NotchAgent는 필 옆의 좁은 화면 영역을 1초에 두 번 읽고 평균 밝기만 남깁니다.',
   'The notch stays open with every reading visible.':'노치를 열어 두고 모든 측정값을 표시합니다.',
   'Edge':'가장자리',
   'Left':'왼쪽',
@@ -857,30 +857,30 @@ const KO_STATIC = {
   'Lies flat along the bottom edge, with the card opening above it.':'화면 아래쪽 가장자리에 가로로 눕고, 카드는 위로 열립니다.',
   'Which screen the notch lives on.':'노치를 표시할 화면입니다.',
   'this screen cannot be remembered by name':'이 화면은 이름으로 기억할 수 없습니다',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'화면 오른쪽 가장자리에 있는 검은색 필로, 도구당 하나의 링이 있습니다. 끄면 필이 사라지지만, 어느 쪽이든 Codenotch는 사용량을 계속 계산합니다.',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'화면 오른쪽 가장자리에 있는 검은색 필로, 도구당 하나의 링이 있습니다. 끄면 필이 사라지지만, 어느 쪽이든 NotchAgent는 사용량을 계속 계산합니다.',
   'Recentre':'가운데로 되돌리기',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Alt 키를 누른 채 노치를 드래그하면 가장자리를 따라 옮길 수 있습니다. 가장자리마다 마지막 위치를 기억합니다. \'가운데로 되돌리기\'를 사용하면 현재 위치한 가장자리의 중앙으로 돌아가며, 필이 있던 화면이 연결 해제된 경우에는 기본 화면의 오른쪽 가장자리로 돌아갑니다.',
   'The notch is back in the middle':'노치가 중앙으로 돌아왔습니다',
   'App':'앱',
   'App icon':'앱 아이콘',
   'Neither':'표시 안 함',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'시계 옆에 있는 작은 아이콘입니다. 마우스 오른쪽 버튼을 클릭하면 이 창이 열리거나, 측정값을 새로 고치거나, Codenotch를 종료할 수 있습니다.',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'유지됨: 노치가 숨겨져 있으므로 이 아이콘이 Codenotch에 접근할 수 있는 유일한 방법입니다. 이 아이콘을 숨기려면 먼저 노치를 다시 켜십시오.',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'작업 표시줄 아이콘이 켜진 상태로 유지되었습니다. 노치가 숨겨진 상태에서는 이 창을 열거나 Codenotch를 종료하는 유일한 방법이므로, Codenotch는 두 가지를 동시에 끄는 것을 허용하지 않습니다.',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'시계 옆에 있는 작은 아이콘입니다. 마우스 오른쪽 버튼을 클릭하면 이 창이 열리거나, 측정값을 새로 고치거나, NotchAgent를 종료할 수 있습니다.',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'유지됨: 노치가 숨겨져 있으므로 이 아이콘이 NotchAgent에 접근할 수 있는 유일한 방법입니다. 이 아이콘을 숨기려면 먼저 노치를 다시 켜십시오.',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'작업 표시줄 아이콘이 켜진 상태로 유지되었습니다. 노치가 숨겨진 상태에서는 이 창을 열거나 NotchAgent를 종료하는 유일한 방법이므로, NotchAgent는 두 가지를 동시에 끄는 것을 허용하지 않습니다.',
   'Language':'언어',
   'Follow system':'시스템 따르기',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'Codenotch에서 사용할 언어를 설정합니다. "시스템 따르기"는 Windows 자체에 설정된 언어를 사용합니다.',
-  'Open Codenotch at login':'로그인 시 Codenotch 열기',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'이 컴퓨터에 로그인할 때마다 Codenotch가 자동으로 열리며, 코딩 세션이 시작될 때까지 백그라운드에서 조용히 대기합니다. 이 기능을 끄면 Codenotch를 직접 열어야 합니다.',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'NotchAgent에서 사용할 언어를 설정합니다. "시스템 따르기"는 Windows 자체에 설정된 언어를 사용합니다.',
+  'Open NotchAgent at login':'로그인 시 NotchAgent 열기',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'이 컴퓨터에 로그인할 때마다 NotchAgent가 자동으로 열리며, 코딩 세션이 시작될 때까지 백그라운드에서 조용히 대기합니다. 이 기능을 끄면 NotchAgent를 직접 열어야 합니다.',
   'Version':'버전',
   'Data folder':'데이터 폴더',
   'Open folder':'폴더 열기',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Codenotch가 기억하는 모든 항목은 하나의 폴더에 저장됩니다: 설정, 로그 파일, 그리고 사용자 지정 아이콘을 넣을 수 있는 "glyphs" 폴더가 있습니다. 파일 탐색기에서 열립니다.',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'NotchAgent가 기억하는 모든 항목은 하나의 폴더에 저장됩니다: 설정, 로그 파일, 그리고 사용자 지정 아이콘을 넣을 수 있는 "glyphs" 폴더가 있습니다. 파일 탐색기에서 열립니다.',
   'App designed and developed by':'앱 디자인 및 개발',
   'Saved':'저장됨',
   'System tray':'시스템 트레이',
   'Close':'닫기',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'시스템 트레이에 아이콘이 없습니다. 이 설정을 다시 가져오려면 시작 메뉴에서 Codenotch를 다시 여십시오.',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'시스템 트레이에 아이콘이 없습니다. 이 설정을 다시 가져오려면 시작 메뉴에서 NotchAgent를 다시 여십시오.',
   'Model data':'모델 데이터',
   'English':'English',
   'Show move handle':'이동 핸들 표시',
@@ -914,12 +914,12 @@ const UK_STATIC = {
   'Up to date':'Актуальна версія',
   'Could not check for updates':'Не вдалося перевірити оновлення',
   'Could not install the update':'Не вдалося встановити оновлення',
-  'Codenotch checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'Codenotch перевіряє нові версії для Windows невдовзі після запуску. Підписані оновлення встановлюються тут; інакше завантажте й запустіть офіційний інсталятор з GitHub.',
+  'NotchAgent checks for new Windows releases shortly after it starts. Signed updates install here; otherwise download and run the official installer from GitHub.':'NotchAgent перевіряє нові версії для Windows невдовзі після запуску. Підписані оновлення встановлюються тут; інакше завантажте й запустіть офіційний інсталятор з GitHub.',
   'Settings sections':'Розділи налаштувань',
   'Accounts':'Акаунти',
   'Appearance':'Зовнішній вигляд',
   'General':'Загальні',
-  'Quit Codenotch':'Вийти з Codenotch',
+  'Quit NotchAgent':'Вийти з NotchAgent',
   'Connected':'Підключені',
   'Not connected':'Не підключені',
   'These have no ring to place. Switch one on and it joins the end of the list above.':'У цих немає кільця для розміщення. Увімкніть будь-який — і він стане в кінець списку вище.',
@@ -931,8 +931,8 @@ const UK_STATIC = {
   'Weekly Limit':'Тижневий ліміт',
   'Gemini Models':'Моделі Gemini',
   'Claude and GPT models':'Моделі Claude і GPT',
-  'Let Claude Code notify Codenotch':'Дозволити Claude Code сповіщати Codenotch',
-  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'Коли це ввімкнено, у файл налаштувань Claude Code додається кілька рядків, щоб він надсилав Codenotch коротке повідомлення на початку сесії, під час роботи, коли чекає на вашу відповідь і коли завершує. Саме завдяки цьому кільце обертається, а бурштинове пульсує.',
+  'Let Claude Code notify NotchAgent':'Дозволити Claude Code сповіщати NotchAgent',
+  'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.':'Коли це ввімкнено, у файл налаштувань Claude Code додається кілька рядків, щоб він надсилав NotchAgent коротке повідомлення на початку сесії, під час роботи, коли чекає на вашу відповідь і коли завершує. Саме завдяки цьому кільце обертається, а бурштинове пульсує.',
   'Notch':'Виріз',
   'Show':'Показувати',
   'Always show':'Показувати завжди',
@@ -955,7 +955,7 @@ const UK_STATIC = {
   'Show on hover':'Показувати при наведенні',
   'A small pill at the screen edge that opens when you reach it.':'Невелика смужка біля краю екрана, що розгортається при наведенні.',
   'Adaptive pill':'Адаптивна смужка',
-  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, Codenotch reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'Поки виріз згорнуто, смужка підлаштовується під тло: світла на темному, чорна на світлому, щоб її було легко знайти. Для цього Codenotch двічі на секунду зчитує вузьку ділянку екрана поруч із нею і зберігає лише її середню яскравість.',
+  'While the notch is folded, its pill follows what is behind it: light over a dark background, black over a light one, so it stays easy to find. To tell, NotchAgent reads a thin strip of the screen beside the pill twice a second and keeps only its average brightness.':'Поки виріз згорнуто, смужка підлаштовується під тло: світла на темному, чорна на світлому, щоб її було легко знайти. Для цього NotchAgent двічі на секунду зчитує вузьку ділянку екрана поруч із нею і зберігає лише її середню яскравість.',
   'The notch stays open with every reading visible.':'Виріз лишається відкритим, усі показники видно.',
   'Edge':'Край',
   'Left':'Ліворуч',
@@ -973,29 +973,29 @@ const UK_STATIC = {
   'Show move handle':'Показувати маркер переміщення',
   'The arc above the notch. Hold it to carry the notch to another edge — Edge above does the same.':'Дуга над вирізом. Утримуйте її, щоб перенести виріз на інший край — те саме робить «Край» вище.',
   'Hold Alt and drag the notch to slide it along its edge. Each edge remembers where you left it. Recentre puts it back in the middle of the edge it is on, or on the main screen\'s right-hand edge if the screen it was on has been unplugged.':'Утримуйте Alt і перетягніть виріз, щоб посунути його вздовж краю. Кожен край памʼятає останнє положення. Кнопка «Центрувати» повертає його на середину поточного краю або на правий край основного екрана, якщо екран, на якому він був, відʼєднано.',
-  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.':'Чорна панель біля правого краю екрана, по кільцю на кожен інструмент. Якщо вимкнути, панель зникне — але використання Codenotch рахує в будь-якому разі.',
+  'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.':'Чорна панель біля правого краю екрана, по кільцю на кожен інструмент. Якщо вимкнути, панель зникне — але використання NotchAgent рахує в будь-якому разі.',
   'Recentre':'Центрувати',
   'The notch is back in the middle':'Виріз повернувся в центр',
   'App':'Застосунок',
   'App icon':'Значок застосунку',
   'Neither':'Ніде',
-  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.':'Невеликий значок унизу біля годинника. Клацання правою кнопкою відкриває це вікно, оновлює показники або завершує роботу Codenotch.',
-  'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.':'Лишено ввімкненим: виріз приховано, тож цей значок — єдиний спосіб дістатися до Codenotch. Щоб сховати значок, спершу увімкніть виріз назад.',
-  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.':'Значок на панелі задач лишено ввімкненим. Коли виріз приховано, це єдиний спосіб відкрити це вікно чи завершити роботу Codenotch, тож вимкнути обидва одночасно застосунок не дасть.',
+  'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.':'Невеликий значок унизу біля годинника. Клацання правою кнопкою відкриває це вікно, оновлює показники або завершує роботу NotchAgent.',
+  'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.':'Лишено ввімкненим: виріз приховано, тож цей значок — єдиний спосіб дістатися до NotchAgent. Щоб сховати значок, спершу увімкніть виріз назад.',
+  'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.':'Значок на панелі задач лишено ввімкненим. Коли виріз приховано, це єдиний спосіб відкрити це вікно чи завершити роботу NotchAgent, тож вимкнути обидва одночасно застосунок не дасть.',
   'Language':'Мова',
   'Follow system':'Як у системі',
-  'Sets the language used by Codenotch. “Follow system” uses the language Windows itself is set to.':'Задає мову Codenotch. Варіант «Як у системі» бере мову, вибрану в самій Windows.',
-  'Open Codenotch at login':'Відкривати Codenotch під час входу',
-  'Codenotch opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open Codenotch yourself.':'Codenotch відкривається сам щоразу, коли ви входите на цей компʼютер, і тихо чекає у фоні, доки не почнеться сесія розробки. Якщо вимкнути, відкривати Codenotch доведеться вручну.',
+  'Sets the language used by NotchAgent. “Follow system” uses the language Windows itself is set to.':'Задає мову NotchAgent. Варіант «Як у системі» бере мову, вибрану в самій Windows.',
+  'Open NotchAgent at login':'Відкривати NotchAgent під час входу',
+  'NotchAgent opens by itself every time you sign in to this computer, and waits quietly in the background until a coding session starts. Turn it off and you have to open NotchAgent yourself.':'NotchAgent відкривається сам щоразу, коли ви входите на цей компʼютер, і тихо чекає у фоні, доки не почнеться сесія розробки. Якщо вимкнути, відкривати NotchAgent доведеться вручну.',
   'Version':'Версія',
   'Data folder':'Тека даних',
   'Open folder':'Відкрити теку',
-  'Everything Codenotch remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Усе, що памʼятає Codenotch, лежить в одній теці: ваші налаштування, його журнал і тека «glyphs», куди можна покласти власні значки. Відкривається у Провіднику.',
+  'Everything NotchAgent remembers lives in one folder: your settings, its log file, and the "glyphs" folder where you can drop your own icons. Opens in File Explorer.':'Усе, що памʼятає NotchAgent, лежить в одній теці: ваші налаштування, його журнал і тека «glyphs», куди можна покласти власні значки. Відкривається у Провіднику.',
   'App designed and developed by':'Дизайн і розробка застосунку —',
   'Saved':'Збережено',
   'System tray':'Область сповіщень',
   'Close':'Закрити',
-  'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.':'Значка в області сповіщень немає. Відкрийте Codenotch знову з меню «Пуск», щоб повернути ці налаштування.',
+  'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.':'Значка в області сповіщень немає. Відкрийте NotchAgent знову з меню «Пуск», щоб повернути ці налаштування.',
   'Model data':'Дані моделі'
 };
 const STATIC_TEXT = { 'pt-BR': PT_BR_STATIC, ru: RU_STATIC, zh: ZH_STATIC, 'zh-Hant': ZH_HANT_STATIC, ja: JA_STATIC, ko: KO_STATIC, uk: UK_STATIC };
@@ -1207,7 +1207,7 @@ function drawSwitch(el, s){
   el.disabled = s.busy;
 }
 const hooks = remote('get_hooks_installed', 'set_hooks_installed', 'The Claude Code messages', () => renderAccounts());
-const autostart = remote('get_autostart', 'set_autostart', 'Open Codenotch at login', () => drawSwitch(document.getElementById('sw-autostart'), autostart));
+const autostart = remote('get_autostart', 'set_autostart', 'Open NotchAgent at login', () => drawSwitch(document.getElementById('sw-autostart'), autostart));
 document.getElementById('sw-autostart').addEventListener('click', () => autostart.toggle());
 const moveHandle = remote('get_move_handle', 'set_move_handle', 'Show move handle', () => drawSwitch(document.getElementById('sw-move'), moveHandle));
 document.getElementById('sw-move').addEventListener('click', () => moveHandle.toggle());
@@ -1224,7 +1224,7 @@ let notchSlots = [];
 const AG_LIMITS = [['automatic', 'Automatic'], ['5h', '5-Hour Limit'], ['weekly', 'Weekly Limit']];
 const AG_MODELS = [['gemini', 'Gemini Models'], ['3p', 'Claude and GPT models']];
 let agPrefs = { limit:'automatic', model:'gemini' };
-const HOOKS_WHY = 'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends Codenotch a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.';
+const HOOKS_WHY = 'Turning this on adds a few lines to your Claude Code settings file so that Claude Code sends NotchAgent a short message when a session starts, when it is working, when it is waiting for your answer, and when it finishes. That is what makes the ring spin and the amber ring pulse.';
 const ONE_STAYS = 'One provider always stays ticked, so the pill is never empty.';
 const NO_RING = 'These have no ring to place. Switch one on and it joins the end of the list above.';
 
@@ -1251,9 +1251,9 @@ function accountBlock(p, isOn, locked){
       + '<div class="acct-sub"><span>' + esc(ui('Model data', 'Model data')) + '</span>' + agSelect('model', AG_MODELS, agPrefs.model) + '</div>';
   }
   if(p.id === 'claude'){
-    h += '<div class="acct-sub"><span>' + esc(ui('Let Claude Code notify Codenotch', 'Let Claude Code notify Codenotch')) + '</span>'
+    h += '<div class="acct-sub"><span>' + esc(ui('Let Claude Code notify NotchAgent', 'Let Claude Code notify NotchAgent')) + '</span>'
       + '<button class="switch' + (hooks.value ? ' on' : '') + '" role="switch" aria-checked="' + hooks.value + '" data-remote="hooks"'
-      + (hooks.busy ? ' disabled' : '') + ' aria-label="' + esc(ui('Let Claude Code notify Codenotch', 'Let Claude Code notify Codenotch')) + '"></button></div>'
+      + (hooks.busy ? ' disabled' : '') + ' aria-label="' + esc(ui('Let Claude Code notify NotchAgent', 'Let Claude Code notify NotchAgent')) + '"></button></div>'
       + '<div class="acct-detail">' + esc(ui(HOOKS_WHY, HOOKS_WHY)) + '</div>';
   }
   return h + '</div>';
@@ -1313,11 +1313,11 @@ accountsPane.addEventListener('change', e => {
    whenever the notch is hidden, and its answer says what was actually stored. */
 const SHOW_WHY = 'The notch stays open with every reading visible.';
 const HOVER_WHY = 'A small pill at the screen edge that opens when you reach it.';
-const HIDE_WHY = 'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; Codenotch keeps counting your usage either way.';
-const TRAY_WHY = 'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits Codenotch.';
-const NO_TRAY_WHY = 'No icon in the system tray. Open Codenotch again from the Start menu to bring these settings back.';
-const HELD_ON = 'Held on: the notch is hidden, so this icon is the only way left to reach Codenotch. Switch the notch back on first if you want to hide it.';
-const KEPT_ON = 'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit Codenotch, so Codenotch will not let both of them be switched off at the same time.';
+const HIDE_WHY = 'The black pill against the right-hand edge of the screen, with one ring per tool. Turn it off and the pill disappears; NotchAgent keeps counting your usage either way.';
+const TRAY_WHY = 'The small icon down by the clock. Right-clicking it opens this window, refreshes the readings, or quits NotchAgent.';
+const NO_TRAY_WHY = 'No icon in the system tray. Open NotchAgent again from the Start menu to bring these settings back.';
+const HELD_ON = 'Held on: the notch is hidden, so this icon is the only way left to reach NotchAgent. Switch the notch back on first if you want to hide it.';
+const KEPT_ON = 'The taskbar icon has been kept on. With the notch hidden it is the only way left to open this window or to quit NotchAgent, so NotchAgent will not let both of them be switched off at the same time.';
 let flags = { notch:true, hover:false, tray:true }, flagsBusy = false, flagsCorrected = false;
 
 function readFlags(v){

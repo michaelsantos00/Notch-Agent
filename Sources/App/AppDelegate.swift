@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchFleet: NotchFleet?
@@ -41,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// that rate-limits, actively harmful.
     private var isRunningTests: Bool { Runtime.isUnderTest }
 
-    /// Quit any copy of Codenotch that was already running.
+    /// Quit any copy of NotchAgent that was already running.
     ///
     /// Every notch is a window on the screen edge, so a second copy is not a
     /// harmless duplicate the way a second text editor is: it draws a second
@@ -123,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fleet.setSnapshots(Fixtures.snapshots())
         } else {
             // DeepSeek's Platform usage page is a browser-session provider:
-            // login is explicit, stays in Codenotch's own WKWebView store, and
+            // login is explicit, stays in NotchAgent's own WKWebView store, and
             // the page-local requests are refreshed only after that login.
             let deepSeek = WebSessionProvider(site: Sites.deepSeek)
             // QianwenAI's Token Plan is the same kind of provider: no usage API
@@ -137,14 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // id `minimax` would both poll, both draw a row, and fight over
             // the same archive key. Region is applied here and again when
             // Settings changes it, because the fetch URLs live on the site.
-            let miniMaxWeb = WebSessionProvider(site: Sites.minimax(region: preferences.minimaxRegion))
-            self.miniMaxWeb = miniMaxWeb
+            self.miniMaxWeb = nil
             let webProviders: [WebSessionProvider] = [deepSeek, qianwen]
-            fleet.signInItems = [deepSeek, miniMaxWeb, qianwen].map { provider in
-                let name = provider.displayName
-                return (title: L10n.t("Sign in to \(name)…"),
-                        action: { [weak provider] in provider?.presentSignIn() })
-            }
+            fleet.signInItems = []
 
             // Cursor reads the editor's session, or cursor-agent's if the
             // editor is missing — never a browser one: signing into
@@ -162,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // caller holding every profile can see that.
             let claudeNames = ClaudeProfile.displayNames(for: claudeProfiles)
             let claudeProviders = claudeProfiles.map {
-                ClaudeOAuthProvider(profile: $0, displayName: claudeNames[$0.id])
+                ClaudeOAuthProvider(profile: $0, displayName: claudeNames[$0.id], cli: ClaudeUsageCLI.locate())
             }
             self.claudeProviders = claudeProviders
             let customProviders: [UsageProvider] = preferences.customEndpoints.filter(\.isEnabled).map { endpoint in
@@ -172,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 + [CursorLocalProvider()]
                 + codexProfiles.map { CodexLocalProvider(profile: $0) }
                 + antigravityProfiles.map { AntigravityProvider(profile: $0) }
-                + [GLMProvider(), MiniMaxProvider(web: miniMaxWeb), GrokLocalProvider(), DevinLocalProvider(), OpenCodeProvider(),
+                + [GLMProvider(), MiniMaxProvider(), GrokLocalProvider(), DevinLocalProvider(), OpenCodeProvider(),
                    CommandCodeProvider(), GitHubCopilotProvider(), KimiProvider(), KiroProvider(), AmpProvider(),
                    ApifyProvider(), KiloProvider(),
                    OllamaLocalProvider(endpoint: URL(string: preferences.ollamaEndpoint)!),
@@ -211,35 +207,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     store?.registerCustomProviders(providers)
                 }
                 .store(in: &cancellables)
-            Costs.attach(to: store)
+            AppDataErasure.shutdown = { [weak self] in
+                guard let self else { throw CocoaError(.userCancelled) }
+                try await self.quiesceForErasure()
+            }
+            Costs.attach(to: store, preferences: preferences)
             deepSeek.onAuthenticated = { [weak store] in
                 store?.providerAuthenticationChanged(providerID: "deepseek")
             }
             qianwen.onAuthenticated = { [weak store] in
                 store?.providerAuthenticationChanged(providerID: "qianwenai")
             }
-            miniMaxWeb.onAuthenticated = { [weak store] in
-                store?.providerAuthenticationChanged(providerID: "minimax")
-            }
 
             let updater = Updater()
             self.updater = updater
-            // An update is offered in the notch, and installed there — see
-            // `UpdateCard`. Checked for as it launches; never under test, where
-            // it would reach for the real feed.
-            updater.$prompt
-                .receive(on: RunLoop.main)
-                .sink { [weak fleet] in fleet?.apply(updatePrompt: $0) }
-                .store(in: &cancellables)
-            fleet.onUpdateChoice = { [weak updater] in updater?.respond($0) }
-            // Put off: a red dot on the settings button until it is taken.
-            Publishers.CombineLatest(updater.$pending, updater.$prompt)
-                .map { pending, prompt in pending != nil && prompt == nil }
-                .removeDuplicates()
-                .receive(on: RunLoop.main)
-                .sink { [weak fleet] in fleet?.apply(updatePending: $0) }
-                .store(in: &cancellables)
-            if !isRunningTests { updater.start() }
 
             let relay = OllamaActivityRelay()
             self.ollamaRelay = relay
@@ -394,10 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // kept apart on purpose — clearing only the preference would
                 // leave the notch where it is until the next edge change, and
                 // moving only the panel would put it back on relaunch.
-                resetPosition: { [weak fleet, weak preferences] in
-                    preferences?.setOffset(0, for: preferences?.notchEdge ?? .right)
-                    fleet?.apply(alongOffset: 0)
-                },
+                resetPosition: { [weak fleet] in fleet?.recenter() },
                 quit: { NSApp.terminate(nil) },
                 previewResetAlert: { [weak self] in
                     self?.previewUsageResetAlert()
@@ -1030,7 +1008,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func announceCompletions(sessions: [String: [AgentSession]]) {
         let events = completions.absorb(sessions)
         guard let event = events.first, let preferences, let fleet = notchFleet else { return }
-        Log.usage.info("session \(event.session.name, privacy: .public) \(String(describing: event.reason), privacy: .public)")
+        Log.usage.info("session activity changed")
 
         if preferences.sessionEndSound {
             SessionChime.play(event.reason == .blocked
@@ -1101,10 +1079,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if preferences.sessionEndSound { SessionChime.play(preferences.sessionEndSoundName) }
-        var notice = UsageResetEvent(providerID: "codenotch", providerName: "Codenotch",
+        var notice = UsageResetEvent(providerID: "codenotch", providerName: "NotchAgent",
                                      windowLabel: "", glyph: .claude,
                                      previousFraction: 0, currentFraction: 0, resetsAt: nil)
-        notice.noticeTitle = L10n.t("Codenotch test")
+        notice.noticeTitle = L10n.t("NotchAgent test")
         notice.noticeSubtitle = L10n.t("This is what one looks like.")
         notice.noticeStatus = ""
         fleet.showResetAlert(notice, duration: 5.0)
@@ -1238,7 +1216,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PhoneLinkWindowController.shared.show(pairing: pairing, registry: registry, port: preferences?.phoneLinkPort ?? 8788, serverStatus: status)
     }
 
+    @MainActor
+    private func quiesceForErasure() async throws {
+        cancellables.removeAll()
+        Costs.detach()
+        ollamaRelay?.configure(enabled: false, endpoint: OllamaEndpoint.defaultAddress)
+        lmstudioMetrics?.stop()
+        tokenRefresher?.stop()
+        piResponseMonitor?.stop()
+        activityCoordinator?.stop()
+        notchFleet?.stop()
+        await CostAccountStore.shared.stopPlanDetection()
+        await store?.quiesceForErasure()
+        await phoneLinkServer?.stop()
+        if SMAppService.mainApp.status == .enabled {
+            try await SMAppService.mainApp.unregister()
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        Costs.detach()
         ollamaRelay?.configure(enabled: false, endpoint: OllamaEndpoint.defaultAddress)
         lmstudioMetrics?.stop()
         tokenRefresher?.stop()

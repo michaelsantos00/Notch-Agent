@@ -37,7 +37,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Cost per project"),
-                        detail: L10n.t("A new Costs section reads the transcripts Claude Code and Codex already keep, and shows what each project spent of each login's allowance — by day, week and month, priced from your plan. Usage from before Codenotch was running is shown as other, never guessed.")
+                        detail: L10n.t("A new Costs section reads the transcripts Claude Code and Codex already keep, and shows what each project spent of each login's allowance — by day, week and month, priced from your plan. Usage from before NotchAgent was running is shown as other, never guessed.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Figures that keep up"),
@@ -124,8 +124,8 @@ enum ReleaseNotes {
                         detail: L10n.t("Two more languages, both complete.")
                     ),
                     ReleaseNote.Change(
-                        title: L10n.t("A colour ramp across the whole range"),
-                        detail: L10n.t("Opt in to a ring that shifts colour continuously from empty to full, instead of stepping at the thresholds.")
+                        title: L10n.t("A color ramp across the whole range"),
+                        detail: L10n.t("Opt in to a ring that shifts color continuously from empty to full, instead of stepping at the thresholds.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Qianwen's monthly Token Plan, and two numbers that are not numbers"),
@@ -139,7 +139,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Your own endpoints"),
-                        detail: L10n.t("Add any OpenAI-compatible endpoint and give it a ring: a name, an icon, a colour, a monthly budget in dollars or tokens, and a live check that says whether it is actually answering. The key goes to the keychain. A scan finds the usual local ports, so a model running on this Mac does not have to be typed in.")
+                        detail: L10n.t("Add any OpenAI-compatible endpoint and give it a ring: a name, an icon, a color, a monthly budget in dollars or tokens, and a live check that says whether it is actually answering. The key goes to the keychain. A scan finds the usual local ports, so a model running on this Mac does not have to be typed in.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Amp"),
@@ -155,7 +155,7 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Quieter"),
-                        detail: L10n.t("Opening Codenotch no longer announces a limit that was reached long before: a reading kept from last time is no longer mistaken for something that just happened. Clicking the notch to hold it open lasts the session rather than for good, so the full-screen fold is never disabled behind your back.")
+                        detail: L10n.t("Opening NotchAgent no longer announces a limit that was reached long before: a reading kept from last time is no longer mistaken for something that just happened. Clicking the notch to hold it open lasts the session rather than for good, so the full-screen fold is never disabled behind your back.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("The menu bar shows more"),
@@ -237,7 +237,7 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("QianwenAI"),
-                        detail: L10n.t("A ring for QianwenAI's Token Plan, signed into from Codenotch.")
+                        detail: L10n.t("A ring for QianwenAI's Token Plan, signed into from NotchAgent.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("繁體中文, and every language complete"),
@@ -259,15 +259,15 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("No more crash in Simplified Chinese"),
-                        detail: L10n.t("With the app in 简体中文, a provider past 80% crashed Codenotch a few seconds after launch. Every translation is now checked for this.")
+                        detail: L10n.t("With the app in 简体中文, a provider past 80% crashed NotchAgent a few seconds after launch. Every translation is now checked for this.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Deny means no"),
-                        detail: L10n.t("Answering Deny when macOS asks about a saved login now stops Codenotch reading that account from any source, until you choose Allow access… again.")
+                        detail: L10n.t("Answering Deny when macOS asks about a saved login now stops NotchAgent reading that account from any source, until you choose Allow access… again.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Fewer file access prompts"),
-                        detail: L10n.t("Renewing Claude's login no longer starts your MCP servers and hooks, and Kimi sessions are matched without looking inside your folders, so macOS no longer asks about Documents, Desktop or network volumes on Codenotch's behalf.")
+                        detail: L10n.t("Renewing Claude's login no longer starts your MCP servers and hooks, and Kimi sessions are matched without looking inside your folders, so macOS no longer asks about Documents, Desktop or network volumes on NotchAgent's behalf.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Smaller fixes"),
@@ -281,7 +281,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Lighter on the battery"),
-                        detail: L10n.t("Codenotch idles at a fraction of the CPU it used, and moving the pointer costs less than half as much. The working spinner is drawn by the system instead of redrawing the notch every frame, and full-screen apps are checked every two seconds rather than on every movement.")
+                        detail: L10n.t("NotchAgent idles at a fraction of the CPU it used, and moving the pointer costs less than half as much. The working spinner is drawn by the system instead of redrawing the notch every frame, and full-screen apps are checked every two seconds rather than on every movement.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Windows Settings opens again"),
@@ -306,8 +306,8 @@ enum ReleaseNotes {
                 headline: L10n.t("An installer for Windows, Ukrainian, Dark glass, and limits you set yourself."),
                 changes: [
                     ReleaseNote.Change(
-                        title: L10n.t("Codenotch for Windows, installable"),
-                        detail: L10n.t("Every release now carries Codenotch-Setup.exe, which installs for the current user without administrator rights. It is not signed yet, so Windows asks once. The port also gains the Mac's settings window, Small, Medium and Large sizes, a ring for the weekly limit, and Chinese, Japanese, Korean and Ukrainian.")
+                        title: L10n.t("NotchAgent for Windows, installable"),
+                        detail: L10n.t("Every release now carries NotchAgent-Setup.exe, which installs for the current user without administrator rights. It is not signed yet, so Windows asks once. The port also gains the Mac's settings window, Small, Medium and Large sizes, a ring for the weekly limit, and Chinese, Japanese, Korean and Ukrainian.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Українська"),
@@ -341,7 +341,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Kiro and MiniMax"),
-                        detail: L10n.t("Kiro reads the kiro-cli sign-in already on this Mac. MiniMax signs in from Codenotch, with a choice of international or China region.")
+                        detail: L10n.t("Kiro reads the kiro-cli sign-in already on this Mac. MiniMax signs in from NotchAgent, with a choice of international or China region.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Deutsch"),
@@ -357,7 +357,7 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Fold for full-screen apps"),
-                        detail: L10n.t("The automatic fold over full-screen apps can now be switched off, for anyone whose maximised windows kept folding the notch.")
+                        detail: L10n.t("The automatic fold over full-screen apps can now be switched off, for anyone whose maximized windows kept folding the notch.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("DeepSeek pricing windows"),
@@ -394,7 +394,7 @@ enum ReleaseNotes {
                         detail: L10n.t("A quit action in the Settings sidebar, for when the menu bar icon is switched off.")
                     ),
                     ReleaseNote.Change(
-                        title: L10n.t("A web page cannot reach Codenotch's local servers"),
+                        title: L10n.t("A web page cannot reach NotchAgent's local servers"),
                         detail: L10n.t("The Ollama relay and the Windows event server now refuse browser requests from other sites, and raw responses are kept out of the system log. Reading DeepSeek also checks the page's address exactly, where a lookalike domain could have passed before.")
                     ),
                     ReleaseNote.Change(
@@ -449,7 +449,7 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Smaller fixes"),
-                        detail: L10n.t("Recentre moves the notch at once; full-screen auto-fold accounts for the camera housing; and a rate-limit wait no longer costs a whole extra refresh.")
+                        detail: L10n.t("Recenter moves the notch at once; full-screen auto-fold accounts for the camera housing; and a rate-limit wait no longer costs a whole extra refresh.")
                     ),
                 ]
             ),
@@ -541,7 +541,7 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("A ready-made download, no Xcode needed"),
-                        detail: L10n.t("Every build now produces an app bundle you can run, so trying Codenotch no longer starts with a developer setup.")
+                        detail: L10n.t("Every build now produces an app bundle you can run, so trying NotchAgent no longer starts with a developer setup.")
                     ),
                 ]
             ),
@@ -574,8 +574,8 @@ enum ReleaseNotes {
                         detail: L10n.t("Nudge it clear of another menu-bar app anchored to the same spot; remembered per edge.")
                     ),
                     ReleaseNote.Change(
-                        title: L10n.t("Choose an accent colour"),
-                        detail: L10n.t("The device accent by default, or a fixed colour for the ring's positive state — the amber and red warning colours stay fixed regardless.")
+                        title: L10n.t("Choose an accent color"),
+                        detail: L10n.t("The device accent by default, or a fixed color for the ring's positive state — the amber and red warning colors stay fixed regardless.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("A countdown instead of a reset date"),
@@ -613,7 +613,7 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("A real Codex account went unmetered"),
-                        detail: L10n.t("Codex's live reading only recognised a 5-hour and a 7-day window. A free-plan account's real limit was a 30-day one, which fell through unnoticed and showed as nothing metered on an account that was genuinely tracked.")
+                        detail: L10n.t("Codex's live reading only recognized a 5-hour and a 7-day window. A free-plan account's real limit was a 30-day one, which fell through unnoticed and showed as nothing metered on an account that was genuinely tracked.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Switching a provider off now really stops it"),
@@ -671,7 +671,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Codex is read live instead of from a log"),
-                        detail: L10n.t("The figure came from a file Codex writes during a turn, so it was as old as the last time you used it — three days stale in one case. Codenotch now asks Codex itself, and matches its own panel.")
+                        detail: L10n.t("The figure came from a file Codex writes during a turn, so it was as old as the last time you used it — three days stale in one case. NotchAgent now asks Codex itself, and matches its own panel.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("The Codex ring notices the desktop app"),
@@ -701,7 +701,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Tooltips are no longer cut off"),
-                        detail: L10n.t("A card is centred on the ring it belongs to, so the first and last providers threw half of it past the end of the panel — and what fell off was the title. The panel now keeps room for it.")
+                        detail: L10n.t("A card is centered on the ring it belongs to, so the first and last providers threw half of it past the end of the panel — and what fell off was the title. The panel now keeps room for it.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("As many sessions as your screen can hold"),
@@ -719,7 +719,7 @@ enum ReleaseNotes {
                 changes: [
                     ReleaseNote.Change(
                         title: L10n.t("Antigravity shows its actual quota"),
-                        detail: L10n.t("Google will not answer Codenotch directly, so it asks Antigravity's own language server instead — the same place Antigravity's usage panel gets its figure.")
+                        detail: L10n.t("Google will not answer NotchAgent directly, so it asks Antigravity's own language server instead — the same place Antigravity's usage panel gets its figure.")
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Usage reads both ways"),
@@ -753,10 +753,10 @@ enum ReleaseNotes {
                     ),
                     ReleaseNote.Change(
                         title: L10n.t("Claude, Cursor, Codex and Gemini"),
-                        detail: L10n.t("Each read from the tool already signed in on this Mac. Codenotch never asks for a password.")
+                        detail: L10n.t("Each read from the tool already signed in on this Mac. NotchAgent never asks for a password.")
                     ),
                     ReleaseNote.Change(
-                        title: L10n.t("Choose where Codenotch appears"),
+                        title: L10n.t("Choose where NotchAgent appears"),
                         detail: L10n.t("In the Dock, in the menu bar, or nowhere at all.")
                     )
                 ]

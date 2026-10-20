@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 final class GitHubCopilotUsageTests: XCTestCase {
     func testReadsCopilotQuotas() throws {
@@ -51,5 +51,22 @@ final class GitHubCopilotUsageTests: XCTestCase {
         )
         XCTAssertEqual(credentials.token, "cli-token")
         XCTAssertEqual(credentials.source, "GitHub CLI")
+    }
+
+    func testFallsBackToGHAuthTokenCommand() throws {
+        let credentials = try GitHubCopilotCredentials.load(
+            environment: [:],
+            hosts: nil,
+            command: { "cli-auth-token" }
+        )
+        XCTAssertEqual(credentials.token, "cli-auth-token")
+        XCTAssertEqual(credentials.source, "GitHub CLI")
+    }
+
+    func testGHAuthTokenArgumentsIncludeHostname() {
+        XCTAssertEqual(
+            GitHubCopilotCredentials.ghAuthTokenArguments,
+            ["auth", "token", "--hostname", "github.com"]
+        )
     }
 }

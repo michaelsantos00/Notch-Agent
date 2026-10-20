@@ -239,7 +239,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         )
         // Kept for the Window menu and Mission Control; hidden from the bar
         // itself, where the sidebar already names what you are looking at.
-        window.title = L10n.t("Codenotch Settings")
+        window.title = L10n.t("NotchAgent Settings")
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         // A floating rounded panel rather than a square window. The rounded

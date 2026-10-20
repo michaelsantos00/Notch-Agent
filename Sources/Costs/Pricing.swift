@@ -32,8 +32,7 @@ final class PriceTable: ObservableObject {
         return base.appendingPathComponent("Codenotch/costs/prices.json")
     }()
 
-    /// Fallback prices from the bundle (Resources/prices-default.json); replaced
-    /// by OpenRouter's list on the first daily refresh.
+    /// Bundled prices used until the user edits the local price list.
     static let defaults: [ModelPrice] = {
         guard let url = Bundle.main.url(forResource: "prices-default", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -51,7 +50,21 @@ final class PriceTable: ObservableObject {
         prices = Self.defaults
         rate = 0                                   // unknown until fetched (USD needs none)
         if Locale.current.currency?.identifier == "USD" { rate = 1 }
-        if let data = try? Data(contentsOf: Self.fileURL),
+        loading = false
+        loadLocal()
+    }
+
+    func loadLocal() {
+        guard !Runtime.isUnderTest else { return }
+        do {
+            try PrivacyFileProtection.secureDirectory(at: Self.fileURL.deletingLastPathComponent())
+            try PrivacyFileProtection.secureFile(at: Self.fileURL)
+        } catch {
+            lastError = L10n.t("Could not secure the local price file.")
+            return
+        }
+        loading = true
+        if !Runtime.isUnderTest, let data = try? Data(contentsOf: Self.fileURL),
            let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
             if let list = root["prices"] as? [[String: Any]] {
                 let decoded = list.compactMap { d -> ModelPrice? in
@@ -66,49 +79,12 @@ final class PriceTable: ObservableObject {
             if let t = root["rateUpdatedAt"] as? Double { rateUpdatedAt = Date(timeIntervalSince1970: t) }
         }
         loading = false
-        refreshIfDue()
-        Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.refreshIfDue() }
-        }
     }
 
-    // MARK: Daily refresh from public sources (no keys)
-
-    static let modelsURL = URL(string: "https://openrouter.ai/api/v1/models")!
-    static let fxURL = URL(string: "https://open.er-api.com/v6/latest/USD")!
+    // MARK: Local offline pricing (remote automatic fetches disabled)
 
     func refreshIfDue(force: Bool = false) {
-        let day: TimeInterval = 24 * 3600
-        let needPrices = force || (pricesUpdatedAt.map { Date().timeIntervalSince($0) > day } ?? true)
-        let needRate = force || (rateUpdatedAt.map { Date().timeIntervalSince($0) > day } ?? true)
-        guard needPrices || needRate else { return }
-        let currency = self.currency
-        Task.detached(priority: .utility) {
-            var newPrices: [ModelPrice]?
-            var newRate: Double?
-            var failure: String?
-            if needPrices {
-                do {
-                    let (data, _) = try await URLSession.shared.data(from: Self.modelsURL)
-                    newPrices = Self.parseOpenRouter(data)
-                } catch { failure = "OpenRouter: \(error.localizedDescription)" }
-            }
-            if needRate {
-                if currency == "USD" { newRate = 1 } else {
-                    do {
-                        let (data, _) = try await URLSession.shared.data(from: Self.fxURL)
-                        if let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                           let rates = root["rates"] as? [String: Any], let r = rates[currency] as? Double { newRate = r }
-                    } catch { failure = "FX: \(error.localizedDescription)" }
-                }
-            }
-            let p = newPrices, r = newRate, e = failure
-            await MainActor.run {
-                if let p, !p.isEmpty { self.merge(p); self.pricesUpdatedAt = Date() }
-                if let r { self.rate = r; self.rateUpdatedAt = Date() }
-                self.lastError = e
-            }
-        }
+        loadLocal()
     }
 
     /// OpenRouter lists prices per token; keep the vendor models we care about
@@ -137,7 +113,7 @@ final class PriceTable: ObservableObject {
     }
 
     private func save() {
-        guard !loading else { return }
+        guard !loading, !Runtime.isUnderTest, !PersistentWrites.isSuspended else { return }
         var root: [String: Any] = [
             "rate": rate,
             "prices": prices.map { ["model": $0.model, "input": $0.input, "output": $0.output,
@@ -146,8 +122,7 @@ final class PriceTable: ObservableObject {
         if let t = pricesUpdatedAt { root["pricesUpdatedAt"] = t.timeIntervalSince1970 }
         if let t = rateUpdatedAt { root["rateUpdatedAt"] = t.timeIntervalSince1970 }
         if let data = try? JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys]) {
-            try? FileManager.default.createDirectory(at: Self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: Self.fileURL, options: .atomic)
+            try? PrivacyFileProtection.writeAtomically(data: data, to: Self.fileURL)
         }
     }
 
@@ -247,8 +222,7 @@ struct CostEstimator: Sendable {
 
 
 /// Subscription plans and their list prices, from a JSON catalog the user can
-/// edit (Application Support/Codenotch/costs/plans.json, seeded from the bundle) or point
-/// at a URL that is re-read once a day. Nothing about plans lives in code.
+/// edit (Application Support/Codenotch/costs/plans.json, seeded from the bundle).
 @MainActor
 final class PlanCatalog: ObservableObject {
     static let shared = PlanCatalog()
@@ -261,29 +235,28 @@ final class PlanCatalog: ObservableObject {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("Codenotch/costs/plans.json")
     }()
-    static let remoteKey = "plansURL"
-    var remoteURL: String {
-        get { UserDefaults.standard.string(forKey: Self.remoteKey) ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: Self.remoteKey); objectWillChange.send(); refreshIfDue(force: true) }
-    }
 
     private init() {
-        if !FileManager.default.fileExists(atPath: Self.fileURL.path),
+        if !Runtime.isUnderTest, !FileManager.default.fileExists(atPath: Self.fileURL.path),
            let bundled = Bundle.main.url(forResource: "plans", withExtension: "json") {
-            try? FileManager.default.createDirectory(at: Self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? FileManager.default.copyItem(at: bundled, to: Self.fileURL)
+            if let data = try? Data(contentsOf: bundled) {
+                try? PrivacyFileProtection.writeAtomically(data: data, to: Self.fileURL)
+            }
         }
         load()
-        refreshIfDue()
-        Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.refreshIfDue() }
-        }
     }
 
-    private func load() {
-        guard let data = try? Data(contentsOf: Self.fileURL) else { return }
+    func load() {
+        if !Runtime.isUnderTest {
+            do {
+                try PrivacyFileProtection.secureDirectory(at: Self.fileURL.deletingLastPathComponent())
+                try PrivacyFileProtection.secureFile(at: Self.fileURL)
+            } catch { return }
+        }
+        let source = Runtime.isUnderTest ? Bundle.main.url(forResource: "plans", withExtension: "json") : Self.fileURL
+        guard let source, let data = try? Data(contentsOf: source) else { return }
         apply(data)
-        updatedAt = (try? FileManager.default.attributesOfItem(atPath: Self.fileURL.path))?[.modificationDate] as? Date
+        updatedAt = (try? FileManager.default.attributesOfItem(atPath: source.path))?[.modificationDate] as? Date
     }
 
     private func apply(_ data: Data) {
@@ -298,19 +271,8 @@ final class PlanCatalog: ObservableObject {
         plans = out
     }
 
-    /// Re-read a remote catalog at most once a day, when one is configured.
     func refreshIfDue(force: Bool = false) {
-        guard let url = URL(string: remoteURL), !remoteURL.isEmpty else { return }
-        if !force, let at = updatedAt, Date().timeIntervalSince(at) < 24 * 3600 { return }
-        Task.detached(priority: .utility) {
-            guard let (data, resp) = try? await URLSession.shared.data(from: url),
-                  (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
-            await MainActor.run {
-                self.apply(data)
-                try? data.write(to: Self.fileURL, options: .atomic)
-                self.updatedAt = Date()
-            }
-        }
+        load()
     }
 
     func name(for tier: String) -> String {

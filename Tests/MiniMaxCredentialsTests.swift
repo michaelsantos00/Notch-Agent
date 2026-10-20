@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 final class MiniMaxCredentialsTests: XCTestCase {
     func testTheCodingPlanEnvironmentKeyWinsOverTheGenericKeyAndTheKeychain() {

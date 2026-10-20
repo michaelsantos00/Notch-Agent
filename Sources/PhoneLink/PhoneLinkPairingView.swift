@@ -73,7 +73,7 @@ struct PhoneLinkPairingView: View {
                 } else {
                     Text(L10n.t("Connect your phone"))
                         .font(.headline)
-                    Text(L10n.t("Scan this code with the Codenotch app on your phone."))
+                    Text(L10n.t("Scan this code with the NotchAgent app on your phone."))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
@@ -114,7 +114,7 @@ struct PhoneLinkPairingView: View {
                     .padding(.horizontal)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.t("1. Open Codenotch on your phone"))
+                        Text(L10n.t("1. Open NotchAgent on your phone"))
                         Text(L10n.t("2. Tap Scan QR Code"))
                         Text(L10n.t("3. Point your phone at this code"))
                     }

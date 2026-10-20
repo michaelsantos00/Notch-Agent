@@ -11,10 +11,10 @@ actor AmpProvider: UsageProvider {
     private let now: @Sendable () -> Date
     private var retryNoEarlierThan: Date?
 
-    init(session: URLSession = .shared, archive: UsageArchive = UsageArchive(),
+    init(session: URLSession? = nil, archive: UsageArchive = UsageArchive(),
          secretsURL: URL = AmpCredentials.secretsURL,
          now: @escaping @Sendable () -> Date = { Date() }) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .amp)
         self.archive = archive
         self.secretsURL = secretsURL
         self.now = now
@@ -47,10 +47,14 @@ actor AmpProvider: UsageProvider {
         request.timeoutInterval = 15
         request.httpBody = Data(#"{"jsonrpc":"2.0","method":"userDisplayBalanceInfo","params":{},"id":1}"#.utf8)
 
+        try NetworkPolicy.validate(request: request, for: .amp)
+
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .amp))
+        } catch let error as NetworkPolicy.PolicyError {
+            throw error
         } catch let error as URLError where error.code == .timedOut {
             throw UsageProviderError.timedOut
         } catch is CancellationError {

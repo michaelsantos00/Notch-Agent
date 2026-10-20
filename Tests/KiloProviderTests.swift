@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Contract for `KiloProvider`'s injectable surface.
 ///
@@ -51,7 +51,7 @@ final class KiloProviderTests: XCTestCase {
     }
 
     private static func baseURL() -> URL {
-        URL(string: "https://kilo.test")!
+        URL(string: "https://api.kilo.ai")!
     }
 
     private func makeProvider(authJSON: String) throws -> KiloProvider {

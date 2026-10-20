@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Codenotch
+@testable import NotchAgent
 
 /// **One silhouette, not two shapes that touch.**
 ///

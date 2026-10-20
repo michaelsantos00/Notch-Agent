@@ -18,8 +18,8 @@ actor CursorLocalProvider: UsageProvider {
     private let endpoint = URL(string: "https://cursor.com/api/usage-summary")!
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        self.session = session ?? NetworkPolicy.makeSession(for: .cursor)
     }
 
     nonisolated var signInRoute: SignInRoute {
@@ -47,7 +47,8 @@ actor CursorLocalProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .cursor)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .cursor))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
 
         if status == 401 || status == 403 {
@@ -63,7 +64,6 @@ actor CursorLocalProvider: UsageProvider {
         }
 
         let body = String(data: data, encoding: .utf8) ?? ""
-        Log.usage.debug("cursor usage -> \(body.prefix(900), privacy: .public)")
 
         let windows = try CursorUsage.windows(fromJSON: body)
         return ProviderSnapshot(

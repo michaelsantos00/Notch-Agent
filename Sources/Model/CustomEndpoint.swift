@@ -60,13 +60,20 @@ public struct CustomEndpoint: Identifiable, Codable, Equatable, Sendable {
     }
 
     public static func isValidURL(_ string: String) -> Bool {
-        guard let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
               let scheme = url.scheme?.lowercased(),
-              (scheme == "http" || scheme == "https"),
-              let host = url.host, !host.isEmpty else {
+              let host = url.host, !host.isEmpty,
+              url.user == nil, url.password == nil else {
             return false
         }
-        return true
+        if scheme == "https" {
+            return true
+        }
+        if scheme == "http" {
+            return NetworkPolicy.isLoopback(host: host)
+        }
+        return false
     }
 
     public var id: String

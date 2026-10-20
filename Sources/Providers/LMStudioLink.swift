@@ -196,7 +196,7 @@ actor LMStudioLink: LMStudioCalling {
         self.namespace = namespace
         self.timeout = timeout
         self.token = token
-        self.session = session ?? OllamaLocalProvider.makeSession()
+        self.session = session ?? NetworkPolicy.makeSession(for: .lmstudioLocal)
     }
 
     func call(_ endpoint: String, parameter: Any? = nil) async throws -> Any {
@@ -237,7 +237,10 @@ actor LMStudioLink: LMStudioCalling {
 
     private func connected() async throws -> URLSessionWebSocketTask {
         if let socket { return socket }
-        let socket = session.webSocketTask(with: LMStudioEndpoint.websocketURL(endpoint, namespace: namespace))
+        let wsURL = LMStudioEndpoint.websocketURL(endpoint, namespace: namespace)
+        try NetworkPolicy.validate(url: wsURL, for: .lmstudioLocal)
+        let socket = session.webSocketTask(with: wsURL)
+        socket.delegate = NetworkPolicy.taskDelegate(for: .lmstudioLocal)
         socket.resume()
         do {
             try await socket.send(.string(LMStudioWire.encode(LMStudioWire.authFrame(token: token()))))

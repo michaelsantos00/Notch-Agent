@@ -17,8 +17,8 @@ actor OllamaProvider: UsageProvider {
     private let endpoint = URL(string: "https://ollama.com/api/usage")!
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        self.session = session ?? NetworkPolicy.makeSession(for: .ollamaCloud)
     }
 
     nonisolated var signInRoute: SignInRoute {
@@ -43,7 +43,8 @@ actor OllamaProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .ollamaCloud)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .ollamaCloud))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
 
         if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
@@ -52,7 +53,6 @@ actor OllamaProvider: UsageProvider {
         }
 
         let body = String(data: data, encoding: .utf8) ?? ""
-        Log.usage.debug("ollama usage -> \(body.prefix(900), privacy: .private)")
 
         let result = try OllamaUsage.parse(body)
         return ProviderSnapshot(

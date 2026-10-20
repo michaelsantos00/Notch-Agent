@@ -1,6 +1,6 @@
 import SQLite3
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Contract for `KiroProvider`'s injectable surface.
 ///

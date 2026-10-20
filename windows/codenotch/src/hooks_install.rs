@@ -4,7 +4,7 @@
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-/// (Claude Code event name, whether it needs a matcher, the internal event reported to Codenotch)
+/// (Claude Code event name, whether it needs a matcher, the internal event reported to NotchAgent)
 const WIRING: &[(&str, bool, &str)] = &[
     ("SessionStart", false, "session_start"),
     ("UserPromptSubmit", false, "running"),
@@ -118,5 +118,5 @@ pub fn uninstall() -> Result<String, String> {
         }
     }
     backup_and_write(&path, &root)?;
-    Ok(format!("removed {removed} Codenotch hook(s)"))
+    Ok(format!("removed {removed} NotchAgent hook(s)"))
 }

@@ -3,7 +3,7 @@
 //!
 //! Data path (the same bargain the other providers strike: borrow a session already on the machine):
 //!   1. Credential, the first of these found: `GH_TOKEN`, then `GITHUB_TOKEN`, from the environment
-//!      Codenotch was started with; then `oauth_token` under the `github.com:` block of GitHub CLI's
+//!      NotchAgent was started with; then `oauth_token` under the `github.com:` block of GitHub CLI's
 //!      `hosts.yml`, which on Windows is `%APPDATA%\GitHub CLI\hosts.yml` (`GH_CONFIG_DIR` and
 //!      `XDG_CONFIG_HOME` are honoured first, `~/.config/gh` last, the way `gh` itself resolves it);
 //!      then `gh auth token --hostname github.com`, run hidden with a short timeout, since GitHub
@@ -372,7 +372,7 @@ fn fetch_once(token: &str) -> Result<serde_json::Value, FetchErr> {
         .set("Authorization", &format!("Bearer {token}"))
         .set("Accept", "application/json")
         .set("X-GitHub-Api-Version", "2022-11-28")
-        .set("User-Agent", "Codenotch")
+        .set("User-Agent", "NotchAgent")
         .call()
     {
         Ok(r) => r.into_json::<serde_json::Value>().map_err(|e| FetchErr::Other(format!("parse: {e}"))),
@@ -387,7 +387,7 @@ fn read_once(prev: &UsageSnapshot) -> UsageSnapshot {
     let mut snap = prev.clone();
     let Some(creds) = read_credentials() else {
         snap.status = "needsAuth".into();
-        snap.note = "Run gh auth login — Codenotch borrows the GitHub CLI's session.".into();
+        snap.note = "Run gh auth login — NotchAgent borrows the GitHub CLI's session.".into();
         return snap;
     };
     match fetch_once(&creds.token) {

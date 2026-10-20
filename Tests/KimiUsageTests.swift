@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// The managed account's windows, pinned to the live response (user id
 /// redacted) — the same figures the CLI's `/usage` leads with.
@@ -67,7 +67,7 @@ final class KimiUsageTests: XCTestCase {
         XCTAssertEqual(read.plan, "Advanced")
     }
 
-    /// A window whose unit Codenotch cannot name is dropped rather than
+    /// A window whose unit NotchAgent cannot name is dropped rather than
     /// mislabelled; the weekly summary carries no window of its own and is a
     /// week by the CLI's own assumption.
     func testAnUnnamedWindowIsDroppedNotInvented() throws {

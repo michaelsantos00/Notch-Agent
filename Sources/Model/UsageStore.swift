@@ -313,6 +313,8 @@ final class UsageStore: ObservableObject {
     }
 
     func start() {
+        guard !isQuiescedForErasure else { return }
+        isStopped = false
         refreshNow()
 
         let timer = Timer(timeInterval: refreshInterval, repeats: true) { [weak self] _ in
@@ -349,7 +351,20 @@ final class UsageStore: ObservableObject {
         }
     }
 
+    private var isStopped = false
+    private var isQuiescedForErasure = false
+
+    func quiesceForErasure() async {
+        isQuiescedForErasure = true
+        let tasks = Array(fetchTasks.values)
+        let refresh = refreshTask
+        stop()
+        for task in tasks { await task.value }
+        await refresh?.value
+    }
+
     func stop() {
+        isStopped = true
         timer?.invalidate()
         timer = nil
         localTimer?.invalidate()
@@ -445,6 +460,7 @@ final class UsageStore: ObservableObject {
     private var freshnessWanted: UsageFreshness { isBusy() ? .live : .standard }
 
     func refreshNow(freshness: UsageFreshness) {
+        guard !isStopped else { return }
         guard !isRefreshing else {
             Log.usage.notice("refresh skipped: one already in flight")
             return
@@ -562,7 +578,8 @@ final class UsageStore: ObservableObject {
 
     func refresh(freshness: UsageFreshness) async {
         // The provider tasks below do not inherit this task's cancellation.
-        guard !Task.isCancelled else { return }
+        guard !isQuiescedForErasure, !Task.isCancelled else { return }
+        isStopped = false
         let tasks = orderedProviders.filter { !disconnected.contains($0.id) }.map {
             beginRefresh($0, freshness: freshness)
         }
@@ -582,6 +599,8 @@ final class UsageStore: ObservableObject {
     /// `.fromSource` instead.
     @discardableResult
     func refresh(providerID: String, freshness: UsageFreshness = .live) -> Task<Void, Never>? {
+        guard !isQuiescedForErasure else { return nil }
+        isStopped = false
         guard let provider = providers.first(where: { $0.id == providerID }),
               !disconnected.contains(providerID) else { return nil }
         if let task = fetchTasks[providerID] { return task }
@@ -619,6 +638,7 @@ final class UsageStore: ObservableObject {
 
     private func beginRefresh(_ provider: UsageProvider, freshness: UsageFreshness = .standard,
                              holdIndicator: Bool = false) -> Task<Void, Never> {
+        guard !isStopped else { return Task {} }
         if let task = fetchTasks[provider.id] { return task }
         let generation = generations[provider.id, default: 0]
         refreshing.insert(provider.id)
@@ -731,7 +751,7 @@ final class UsageStore: ObservableObject {
     /// something you do while already signed in, so the shortcut `signIn` takes
     /// when a credential exists is exactly wrong here.
     ///
-    /// Codenotch cannot switch the account itself. The credential belongs to
+    /// NotchAgent cannot switch the account itself. The credential belongs to
     /// Claude Code, Cursor or Codex, and the most this can honestly do is open
     /// the thing that owns it.
     @discardableResult
@@ -805,16 +825,16 @@ final class UsageStore: ObservableObject {
             guard acceptsResult(from: provider, generation: generation) else { return nil }
             if provider.kind == .localRuntime {
                 var empty = Self.placeholder(provider)
-                empty.status = .error(error.localizedDescription)
+                empty.status = .error(Self.sanitizedDescription(for: error))
                 return empty
             }
-            Log.usage.error("\(provider.id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            Log.usage.error("\(provider.id, privacy: .public) failed: \(Self.sanitizedDescription(for: error), privacy: .public)")
             return degraded(provider: provider, error: error)
         }
     }
 
     private func acceptsResult(from provider: UsageProvider, generation: Int) -> Bool {
-        !Task.isCancelled && !disconnected.contains(provider.id)
+        !isStopped && !Task.isCancelled && !disconnected.contains(provider.id)
             && generations[provider.id, default: 0] == generation
     }
 
@@ -944,6 +964,30 @@ final class UsageStore: ObservableObject {
         default:
             return .error((error as NSError).localizedDescription)
         }
+    }
+
+    nonisolated static func sanitizedDescription(for error: Error) -> String {
+        if let policyError = error as? NetworkPolicy.PolicyError {
+            return policyError.localizedDescription
+        }
+        if let usageError = error as? UsageProviderError {
+            switch usageError {
+            case .needsAuth: return "needsAuth"
+            case .accessDenied: return "accessDenied"
+            case .credentialExpired: return "credentialExpired"
+            case .signedOutByOwner: return "signedOutByOwner"
+            case .timedOut: return "timedOut"
+            case .badResponse(let status): return "badResponse(status: \(status))"
+            case .apiError: return "apiError"
+            case .rateLimited(let retry): return "rateLimited(retryAfter: \(Int(retry))s)"
+            case .nothingMetered: return "nothingMetered"
+            }
+        }
+        if let urlError = error as? URLError {
+            return "URLError(code: \(urlError.errorCode))"
+        }
+        let nsError = error as NSError
+        return "\(nsError.domain) code \(nsError.code)"
     }
 
     private static func placeholder(_ provider: UsageProvider) -> ProviderSnapshot {
