@@ -499,6 +499,20 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(minimaxRegion.rawValue, forKey: Keys.minimaxRegion) }
     }
 
+    /// Where Ollama's cloud usage comes from: request counts through the API
+    /// key, or the 5-hour and weekly percentages through a browser's
+    /// ollama.com sign-in. Absent means never chosen, which is the API key —
+    /// nothing reads a browser until someone asks it to.
+    @Published var ollamaUsageSource: OllamaUsageSource {
+        didSet { defaults.set(ollamaUsageSource.rawValue, forKey: Keys.ollamaUsageSource) }
+    }
+
+    /// Which browser profile's ollama.com sign-in to read: `OllamaCloudSource
+    /// .automatic`, or a `BrowserCookies.Store.id` such as "chrome/Profile 1".
+    @Published var ollamaCookieStore: String {
+        didSet { defaults.set(ollamaCookieStore, forKey: Keys.ollamaCookieStore) }
+    }
+
     /// The version whose changes have already been shown.
     ///
     /// Written when the What's New dialogue is dismissed rather than when it
@@ -583,6 +597,8 @@ final class Preferences: ObservableObject {
         /// A new key, so there is nothing under the old app name to migrate.
         static let geminiAPIMonthlyTokenBudget = "geminiAPIMonthlyTokenBudget"
         static let minimaxRegion = "minimaxRegion"
+        static let ollamaUsageSource = "ollamaUsageSource"
+        static let ollamaCookieStore = "ollamaCookieStore"
         static let antigravityHeadlineLimit = "antigravityHeadlineLimit"
         static let antigravityHeadlineModel = "antigravityHeadlineModel"
         static let deepSeekPricingEnabled = "deepSeekPricingEnabled"
@@ -707,6 +723,17 @@ final class Preferences: ObservableObject {
               let region = MiniMaxRegion(rawValue: value)
         else { return .international }
         return region
+    }
+
+    /// Read by the provider, an actor, for the reason `storedMinimaxRegion` is.
+    nonisolated static func storedOllamaUsageSource(
+        defaults: UserDefaults = .standard
+    ) -> OllamaUsageSource {
+        defaults.string(forKey: Keys.ollamaUsageSource).flatMap(OllamaUsageSource.init(rawValue:)) ?? .apiKey
+    }
+
+    nonisolated static func storedOllamaCookieStore(defaults: UserDefaults = .standard) -> String {
+        defaults.string(forKey: Keys.ollamaCookieStore) ?? OllamaCloudSource.automatic
     }
 
     /// True the very first time this copy runs, and never again.
@@ -950,6 +977,8 @@ final class Preferences: ObservableObject {
             ?? SessionChime.defaultBlocked
         self.geminiAPIMonthlyTokenBudget = Self.storedGeminiAPIMonthlyTokenBudget(defaults: defaults)
         self.minimaxRegion = Self.storedMinimaxRegion(defaults: defaults)
+        self.ollamaUsageSource = Self.storedOllamaUsageSource(defaults: defaults)
+        self.ollamaCookieStore = Self.storedOllamaCookieStore(defaults: defaults)
         self.isHistoryIndexingEnabled = defaults.bool(forKey: Keys.historyIndexingEnabled)
         self.enabledHistoryAccountIDs = Set(defaults.stringArray(forKey: Keys.enabledHistoryAccountIDs) ?? [])
         if let obj = defaults.object(forKey: Keys.historyRetentionDays) as? Int {

@@ -2065,11 +2065,12 @@ private struct AccountRow: View {
                 .foregroundStyle(.secondary)
                 .help(L10n.t("Fills the ring against a ceiling you choose; Google publishes none for an API key."))
             }
-            // Ollama owns its credential: the user enters an API key here, stored
-            // in the keychain. The env var OLLAMA_API_KEY is checked first, so a
-            // shell that exports one needs no entry here.
+            // Ollama reads either its own API key (request counts) or a
+            // browser's ollama.com sign-in (the 5-hour and weekly percentages).
+            // The key is stored in the keychain; OLLAMA_API_KEY is checked
+            // first, so a shell that exports one needs no entry here.
             if provider.id == "ollama" {
-                ollamaKeyEntry
+                ollamaSourceEntry
             }
 
             // MiniMax is signed into in NotchAgent, or by a Coding Plan key
@@ -2124,6 +2125,127 @@ private struct AccountRow: View {
             }
         }
         .padding(.top, 2)
+    }
+
+    /// Where Ollama's usage is read from, and for a browser, which one.
+    ///
+    /// The list holds only the profiles actually signed in to ollama.com, found
+    /// from the cookie files' metadata — never the keychain, so filling it
+    /// raises no dialogue. Only the browser in use is ever asked for its key.
+    @State private var ollamaSessions: [BrowserCookies.Session] = []
+    @State private var ollamaSafariNeedsAccess = false
+    @State private var ollamaScanning = false
+
+    private var ollamaSourceEntry: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("Read usage from"))
+                    .foregroundStyle(.secondary)
+                Picker(selection: $preferences.ollamaUsageSource) {
+                    Text(L10n.t("Browser sign-in")).tag(OllamaUsageSource.browser)
+                    Text(L10n.t("API key")).tag(OllamaUsageSource.apiKey)
+                } label: {
+                    EmptyView()
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+                Text(preferences.ollamaUsageSource == .browser
+                     ? L10n.t("Session (5-hour) and weekly limits as a percentage, from ollama.com.")
+                     : L10n.t("Request counts: today, 7 days and 30 days. Ollama's API no longer reports limits."))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            switch preferences.ollamaUsageSource {
+            case .apiKey: ollamaKeyEntry
+            case .browser: ollamaBrowserEntry
+            }
+        }
+        .padding(.top, 2)
+        .onChange(of: preferences.ollamaUsageSource) { _ in refreshOllama() }
+        .onChange(of: preferences.ollamaCookieStore) { _ in refreshOllama() }
+    }
+
+    private var ollamaBrowserEntry: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.t("Browser"))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Picker(selection: $preferences.ollamaCookieStore) {
+                    Text(L10n.t("Automatic")).tag(OllamaCloudSource.automatic)
+                    if !ollamaSessions.isEmpty { Divider() }
+                    ForEach(ollamaSessions, id: \.store.id) { session in
+                        Text(ollamaSessionLabel(session)).tag(session.store.id)
+                    }
+                    let chosen = preferences.ollamaCookieStore
+                    if chosen != OllamaCloudSource.automatic, !ollamaSessions.contains(where: { $0.store.id == chosen }) {
+                        Text(L10n.t("\(chosen) — not signed in")).tag(chosen)
+                    }
+                } label: {
+                    EmptyView()
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 320)
+                Button(L10n.t("Rescan")) { rescanOllamaBrowsers() }
+                    .disabled(ollamaScanning)
+            }
+            if ollamaSessions.isEmpty && !ollamaScanning {
+                Text(L10n.t("No browser on this Mac is signed in to ollama.com. Sign in, then Rescan."))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if preferences.ollamaCookieStore == OllamaCloudSource.automatic,
+                      let pick = BrowserCookies.freshest(ollamaSessions) {
+                Text(L10n.t("Using \(pick.store.displayName), the sign-in that lasts longest."))
+                    .foregroundStyle(.tertiary)
+            }
+            if ollamaSafariNeedsAccess {
+                HStack(spacing: 6) {
+                    Text(L10n.t("Safari's sign-in needs Full Disk Access for NotchAgent."))
+                        .foregroundStyle(.secondary)
+                    Button(L10n.t("Open Settings…")) {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+            Text(L10n.t("Reads only ollama.com's sign-in cookie, and sends it only to ollama.com. Chrome-based browsers ask once for their keychain key; choose Always Allow."))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .task { rescanOllamaBrowsers() }
+    }
+
+    private func ollamaSessionLabel(_ session: BrowserCookies.Session) -> String {
+        guard let expires = session.expires else { return session.store.displayName }
+        let until = expires.formatted(date: .abbreviated, time: .omitted)
+        return L10n.t("\(session.store.displayName) · until \(until)")
+    }
+
+    /// Off the main thread: finding sessions copies each browser's cookie file.
+    private func rescanOllamaBrowsers() {
+        ollamaScanning = true
+        Task {
+            let home = URL(fileURLWithPath: NSHomeDirectory())
+            let (sessions, safari) = await Task.detached {
+                (BrowserCookies.sessions(named: OllamaWebUsage.sessionCookie, host: OllamaWebUsage.host, home: home)
+                    .filter { ($0.expires ?? .distantFuture) > Date() },
+                 BrowserCookies.safariNeedsFullDiskAccess(home: home))
+            }.value
+            ollamaSessions = sessions
+            ollamaSafariNeedsAccess = safari
+            ollamaScanning = false
+        }
+    }
+
+    /// A refresh, not a sign-in: with no key saved, signing in would open
+    /// guidance over the very picker being changed.
+    private func refreshOllama() {
+        guard preferences.ollamaUsageSource == .browser || OllamaCredentials.isPresent else { return }
+        _ = signIn(provider.id)
     }
 
     /// The API token input for Apify. Stored in the keychain on Save, then a
@@ -2193,7 +2315,7 @@ private struct AccountRow: View {
             minimaxKeyEntry
             minimaxCookieEntry
 
-            Text(L10n.t("Paste a MiniMax Coding Plan key. A Cookie header is optional. NotchAgent never reads a browser's cookies."))
+            Text(L10n.t("Paste a MiniMax Coding Plan key. A Cookie header is optional. NotchAgent does not read MiniMax's sign-in from your browser."))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
