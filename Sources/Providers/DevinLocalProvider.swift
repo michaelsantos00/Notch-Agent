@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The cached quota in the Desktop database can lag behind the account, so
 /// each refresh asks GetUserStatus instead. The session is read-only:
-/// whichever tool owns sign-in and token rotation, Codenotch never refreshes
+/// whichever tool owns sign-in and token rotation, NotchAgent never refreshes
 /// or writes its token.
 actor DevinLocalProvider: UsageProvider {
     nonisolated let id = "devin"
@@ -18,11 +18,10 @@ actor DevinLocalProvider: UsageProvider {
 
     init(database: URL = DevinCredentials.storeURL,
          cliCredentials: URL = DevinCredentials.cliCredentialsURL,
-         session: URLSession = URLSession(configuration: .ephemeral,
-                                          delegate: DevinRedirectPolicy(), delegateQueue: nil)) {
+         session: URLSession? = nil) {
         self.store = database
         self.cliCredentials = cliCredentials
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .devin)
     }
 
     nonisolated var isVisibleWhenAbsent: Bool {
@@ -54,7 +53,8 @@ actor DevinLocalProvider: UsageProvider {
             "metadata": ["apiKey": auth.apiKey, "ideName": "windsurf", "ideVersion": "1.108.2",
                          "extensionName": "windsurf", "extensionVersion": "1.108.2", "locale": "en"]
         ])
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .devin)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .devin))
         let http = response as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         if status == 401 { throw UsageProviderError.needsAuth }
@@ -73,14 +73,5 @@ actor DevinLocalProvider: UsageProvider {
             fidelity: .official, status: .ok, windows: windows,
             headlineID: windows.first?.id, weeklyID: "weekly"
         )
-    }
-}
-
-final class DevinRedirectPolicy: NSObject, URLSessionTaskDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask,
-                    willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest,
-                    completionHandler: @escaping (URLRequest?) -> Void) {
-        completionHandler(nil)
     }
 }

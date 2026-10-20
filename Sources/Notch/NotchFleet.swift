@@ -280,6 +280,12 @@ final class NotchFleet {
         }
     }
 
+    /// Center every notch on the current edge and persist the reset.
+    func recenter() {
+        apply(alongOffset: 0)
+        onReposition?(0)
+    }
+
     /// Through `controller.apply(size:)` rather than by setting the model
     /// directly, because the panel has to be rebuilt around the new size —
     /// the same division `apply(edge:)` keeps.
@@ -477,6 +483,7 @@ final class NotchFleet {
         controller.onLook = { [weak self] in self?.onLook?() }
         controller.onRefreshProvider = onRefreshProvider
         controller.onOpenSettings = onOpenSettings
+        controller.onRecenter = { [weak self] in self?.recenter() }
         controller.model.onOpenSettings = onOpenSettings
         controller.model.onFocusSession = onFocusSession
         controller.model.onUpdateChoice = { [weak self] in self?.onUpdateChoice?($0) }

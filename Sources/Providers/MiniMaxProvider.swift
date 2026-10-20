@@ -48,31 +48,28 @@ actor MiniMaxProvider: UsageProvider {
     /// worst a race can do is show the previous plan for one row-draw.
     nonisolated(unsafe) private var lastKnownPlan: String?
 
-    init(session: URLSession = .shared,
+    init(session: URLSession? = nil,
          region: MiniMaxRegion? = nil,
          archive: UsageArchive = UsageArchive(),
          web: WebSessionProvider? = nil,
          loadAPIKey: @escaping @Sendable () -> String? = { MiniMaxCredentials.loadAPIKey() },
          loadCookieHeader: @escaping @Sendable () -> String? = { MiniMaxCredentials.loadCookieHeader() }) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .minimax)
         if let region {
             self.resolveRegion = { region }
         } else {
             self.resolveRegion = { Preferences.storedMinimaxRegion() }
         }
         self.archive = archive
-        self.web = web
-        self.presentsWebSignIn = web != nil
+        self.web = nil
+        self.presentsWebSignIn = false
         self.loadAPIKey = loadAPIKey
         self.loadCookieHeader = loadCookieHeader
         self.retryNoEarlierThan = archive.loadBackoffUntil(providerID: id)
     }
 
     nonisolated var signInRoute: SignInRoute {
-        if presentsWebSignIn {
-            return .modal(name: "MiniMax")
-        }
-        return .guidance(L10n.t("Paste a Coding Plan key in Settings, or Sign in to MiniMax."))
+        .guidance(L10n.t("Paste a Coding Plan key or cookie in Settings."))
     }
 
     nonisolated func account() -> ProviderAccount? {
@@ -139,8 +136,6 @@ actor MiniMaxProvider: UsageProvider {
                 throw UsageProviderError.needsAuth
             }
 
-            let body = String(decoding: data, as: UTF8.self)
-            Log.usage.debug("minimax usage -> \(body.prefix(400), privacy: .public)")
             let parsed = try MiniMaxUsage.parse(data)
             return recordedSuccess(
                 fidelity: fidelity,
@@ -289,8 +284,9 @@ actor MiniMaxProvider: UsageProvider {
             request.setValue(cookie, forHTTPHeaderField: "Cookie")
         }
 
+        try NetworkPolicy.validate(request: request, for: .minimax)
         Log.usage.debug("GET \(url.host ?? "", privacy: .public)\(url.path, privacy: .public)")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .minimax))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         Log.usage.debug("minimax remains answered \(status)")
 

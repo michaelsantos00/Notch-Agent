@@ -1,4 +1,4 @@
-//! Codex usage adapter, implemented from the upstream Codenotch's documented behaviour.
+//! Codex usage adapter, implemented from the upstream NotchAgent's documented behaviour.
 //!
 //! Live endpoint, native-client recovery, and a local rollout fallback:
 //!   1. Live: borrow the session Codex keeps in `~/.codex/auth.json` (`tokens.access_token` +
@@ -13,7 +13,7 @@
 //!      `codex` bucket wins over the legacy single-bucket view, which can refer to Spark.
 //!      This is recovery for a stored-token HTTP failure while the installed client can still
 //!      authenticate, not the old unconditional cmd/node process tree removed in 1.5.0.
-//!      Codex owns any managed OAuth refresh; Codenotch sends no login/refresh request itself.
+//!      Codex owns any managed OAuth refresh; NotchAgent sends no login/refresh request itself.
 //!   3. Fallback: Codex writes the limits it saw on each turn into the thread's rollout log
 //!      `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, as lines like
 //!      `{"timestamp":"…","type":"event_msg","payload":{"type":"token_count","rate_limits":{

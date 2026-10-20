@@ -14,13 +14,13 @@ actor CodexLocalProvider: UsageProvider {
     private var retryNoEarlierThan: Date?
 
     init(profile: CodexProfile = .default(),
-         session: URLSession = .shared,
+         session: URLSession? = nil,
          authURL: URL? = nil,
          archive: UsageArchive = UsageArchive()) {
         self.profile = profile
         self.id = profile.id
         self.displayName = profile.displayName
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .codex)
         self.authURL = authURL ?? profile.authURL
         self.archive = archive
         // Recreating the provider or relaunching must not bypass the server's retry deadline.
@@ -56,7 +56,8 @@ actor CodexLocalProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .codex)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .codex))
         let http = response as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
@@ -118,7 +119,8 @@ actor CodexLocalProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .codex)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .codex))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
         guard (200..<300).contains(status) else {
@@ -146,7 +148,8 @@ actor CodexLocalProvider: UsageProvider {
         request.setValue("codex-1", forHTTPHeaderField: "OpenAI-Beta")
 
         do {
-            let (data, response) = try await session.data(for: request)
+            try NetworkPolicy.validate(request: request, for: .codex)
+            let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .codex))
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(status) else { return nil }
             return try CodexUsage.resetCredits(from: data)

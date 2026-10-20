@@ -132,7 +132,7 @@ actor ClaudeOAuthProvider: UsageProvider {
     /// See `ClaudeProfile.displayNames(for:)`.
     init(profile: ClaudeProfile = .default(),
          displayName: String? = nil,
-         session: URLSession = .shared,
+         session: URLSession? = nil,
          archive: UsageArchive = UsageArchive(),
          loadCredentials: (@Sendable () throws -> ClaudeCredentials)? = nil,
          cli: ClaudeUsageCLI? = ClaudeUsageCLI.locate(),
@@ -142,6 +142,7 @@ actor ClaudeOAuthProvider: UsageProvider {
          desktopFreshness: TimeInterval = 30 * 60,
          liveDesktopFreshness: TimeInterval = 2 * 60,
          desktopRescanInterval: TimeInterval = 5 * 60) {
+        self.session = session ?? NetworkPolicy.makeSession(for: .claude)
         self.cli = cli
         self.cliRefreshInterval = cliRefreshInterval
         self.liveCLIRefreshInterval = liveCLIRefreshInterval
@@ -155,7 +156,6 @@ actor ClaudeOAuthProvider: UsageProvider {
         let keychain = ClaudeKeychain(profile: profile)
         self.keychain = keychain
         self.loadCredentials = loadCredentials ?? { try keychain.load() }
-        self.session = session
         self.archive = archive
         // Pick the back-off back up where the last run left it, so relaunching
         // during a penalty does not spend an attempt extending it.
@@ -478,8 +478,9 @@ actor ClaudeOAuthProvider: UsageProvider {
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .claude)
         Log.usage.debug("GET /api/oauth/usage")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .claude))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         Log.usage.debug("usage endpoint answered \(status)")
 

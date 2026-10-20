@@ -42,6 +42,10 @@ enum OllamaUsage {
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw UsageProviderError.badResponse(status: 0) }
 
+        if let buckets = root["buckets"] as? [[String: Any]] {
+            return counts(buckets: buckets, totals: root["totals"] as? [String: Any])
+        }
+
         let limits = root["limits"] as? [String: Any] ?? [:]
         let activity = root["activity"] as? [String: Any] ?? [:]
         let period = activity["period"] as? [String: Any] ?? [:]
@@ -96,6 +100,35 @@ enum OllamaUsage {
         }
 
         return Result(windows: windows, headlineID: headlineID)
+    }
+
+    /// The request-count shape Ollama answers with since October 2026:
+    ///
+    /// ```json
+    /// { "range": "30d", "granularity": "day",
+    ///   "totals": { "request_count": 37120 },
+    ///   "buckets": [ { "from": "2026-10-20T00:00:00Z", "partial": true,
+    ///                  "request_count": 32 }, ... ] }
+    /// ```
+    ///
+    /// No plan fraction any more, so none is claimed: the windows are counts,
+    /// and the ring draws its track with no arc. Buckets are UTC days, the
+    /// last one partial, so "today" is the UTC day — which the label says.
+    /// A quiet month is still a reading, not "nothing metered".
+    private static func counts(buckets: [[String: Any]], totals: [String: Any]?) -> Result {
+        let daily = buckets.map { $0["request_count"] as? Int ?? 0 }
+        let month = totals?["request_count"] as? Int ?? daily.reduce(0, +)
+        return Result(
+            windows: [
+                LimitWindow(id: "today", label: L10n.t("Requests today (UTC)"),
+                            used: daily.last ?? 0, resetsAt: nil),
+                LimitWindow(id: "week", label: L10n.t("Requests, last 7 days"),
+                            used: daily.suffix(7).reduce(0, +), resetsAt: nil),
+                LimitWindow(id: "month", label: L10n.t("Requests, last 30 days"),
+                            used: month, resetsAt: nil),
+            ],
+            headlineID: "today"
+        )
     }
 
     /// Per-model request counts as individual windows, so each model gets its

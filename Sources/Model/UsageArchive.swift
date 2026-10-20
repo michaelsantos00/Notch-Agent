@@ -60,10 +60,12 @@ struct UsageArchive {
 
     func saveBackoffUntil(_ date: Date?, providerID: String = ClaudeProfile.defaultID) {
         let key = backoffKey(for: providerID)
-        if let date {
-            defaults.set(date, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
+        PersistentWrites.perform {
+            if let date {
+                defaults.set(date, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
         }
     }
 
@@ -131,7 +133,7 @@ struct UsageArchive {
             )
         }
         guard let data = try? JSONEncoder().encode(entries) else { return }
-        defaults.set(data, forKey: key)
+        PersistentWrites.perform { defaults.set(data, forKey: key) }
     }
 
     /// Drop what we remember about one provider.

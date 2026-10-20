@@ -93,8 +93,17 @@ struct AntigravityCredentials {
         if FileManager.default.fileExists(atPath: jsonPath) { return true }
         let ompDBPath = ("~/.omp/agent/agent.db" as NSString).expandingTildeInPath
         if FileManager.default.fileExists(atPath: ompDBPath) { return true }
+        if tokenFilePaths.contains(where: FileManager.default.fileExists(atPath:)) { return true }
         return false
     }
+
+    /// The token files Antigravity keeps, all in one format: the CLI's, and the
+    /// app's own (`jetski-standalone`). Each is refreshed only while its owner
+    /// runs, so whichever ran last holds the token that still works.
+    static let tokenFilePaths: [String] = [
+        "~/.gemini/antigravity-cli/antigravity-oauth-token",
+        "~/.gemini/jetski-standalone-oauth-token",
+    ].map { ($0 as NSString).expandingTildeInPath }
 
     static func hasCredential(for profile: AntigravityProfile) -> Bool {
         if profile.slug == nil { return isSignedIn() }
@@ -124,7 +133,10 @@ struct AntigravityCredentials {
                 let jsonMod = (try? FileManager.default.attributesOfItem(atPath: jsonPath))?[.modificationDate] as? Date
                 let ompPath = ("~/.omp/agent/agent.db" as NSString).expandingTildeInPath
                 let ompMod = (try? FileManager.default.attributesOfItem(atPath: ompPath))?[.modificationDate] as? Date
-                return [keychainMod, jsonMod, ompMod].compactMap { $0 }.max()
+                let tokenFileMods = tokenFilePaths.map {
+                    (try? FileManager.default.attributesOfItem(atPath: $0))?[.modificationDate] as? Date
+                }
+                return ([keychainMod, jsonMod, ompMod] + tokenFileMods).compactMap { $0 }.max()
             },
             reload: read
         )
@@ -195,7 +207,7 @@ struct AntigravityCredentials {
             if !ompCreds.isExpired {
                 return ompCreds
             }
-            if keychainCreds == nil {
+            if keychainCreds == nil || (keychainCreds?.expiresAt ?? .distantPast) < ompCreds.expiresAt {
                 keychainCreds = ompCreds
             }
         }
@@ -205,8 +217,18 @@ struct AntigravityCredentials {
             if !jsonCreds.isExpired {
                 return jsonCreds
             }
-            if keychainCreds == nil {
+            if keychainCreds == nil || (keychainCreds?.expiresAt ?? .distantPast) < jsonCreds.expiresAt {
                 keychainCreds = jsonCreds
+            }
+        }
+
+        // Then the token files the CLI and the app write (see `tokenFilePaths`)
+        if let cliCreds = readTokenFiles() {
+            if !cliCreds.isExpired {
+                return cliCreds
+            }
+            if keychainCreds == nil || (keychainCreds?.expiresAt ?? .distantPast) < cliCreds.expiresAt {
+                keychainCreds = cliCreds
             }
         }
 
@@ -246,6 +268,35 @@ struct AntigravityCredentials {
             authMethod: "consumer",
             projectId: payload.projectId,
             email: payload.email
+        )
+    }
+
+    /// The longest-lived credential among the token files.
+    static func readTokenFiles(at paths: [String] = tokenFilePaths) -> AntigravityCredentials? {
+        paths.compactMap { readCLICredentials(at: $0) }.max { $0.expiresAt < $1.expiresAt }
+    }
+
+    static func readCLICredentials(at path: String = ("~/.gemini/antigravity-cli/antigravity-oauth-token" as NSString).expandingTildeInPath) -> AntigravityCredentials? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+
+        struct CLIPayload: Decodable {
+            struct Token: Decodable {
+                let access_token: String
+                let expiry: String?
+            }
+            let auth_method: String?
+            let token: Token?
+        }
+
+        guard let payload = try? JSONDecoder().decode(CLIPayload.self, from: data),
+              let token = payload.token?.access_token,
+              !token.isEmpty else { return nil }
+
+        let expiry = payload.token?.expiry.flatMap(parse) ?? Date.distantFuture
+        return AntigravityCredentials(
+            accessToken: token,
+            expiresAt: expiry,
+            authMethod: payload.auth_method ?? "consumer"
         )
     }
 
@@ -304,15 +355,22 @@ struct AntigravityCredentials {
                                       authMethod: stored.auth_method)
     }
 
+    private static let iso8601WithFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let iso8601Plain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     /// Fractional seconds are not optional in this field, but a formatter that
     /// demands them fails on a whole-second timestamp — so try both.
     static func parse(_ value: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: value) { return date }
-
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: value)
+        if let date = iso8601WithFraction.date(from: value) { return date }
+        return iso8601Plain.date(from: value)
     }
 }

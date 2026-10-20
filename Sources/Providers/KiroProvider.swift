@@ -36,13 +36,13 @@ actor KiroProvider: UsageProvider {
     /// The plan `/usage` last named, for the settings row.
     nonisolated(unsafe) private var lastKnownPlan: String?
 
-    init(session: URLSession = .shared,
+    init(session: URLSession? = nil,
          cli: (@Sendable () throws -> String)? = nil,
          database: URL = KiroLimits.stateDatabaseURL(),
          archive: UsageArchive = UsageArchive(),
          authURL: URL? = nil,
          locateBinary: @escaping @Sendable () -> URL? = { KiroCLI.locateBinary() }) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .kiro)
         self.cli = cli
         self.database = database
         self.archive = archive
@@ -80,36 +80,54 @@ actor KiroProvider: UsageProvider {
     }
 
     func fetchSnapshot() async throws -> ProviderSnapshot {
-        let text = try await readUsage()
-        var reading = try KiroUsage.parseCLIOutput(text)
-        // Enrichment is optional. A 5xx, a 429, a parse failure — none of
-        // those may throw away the `/usage` windows already in hand. The CLI
-        // does not share GetUsageLimits' rate limit, so a 429 in particular
-        // must not surface as `rateLimited` and darken a ring the CLI filled.
+        var reading: KiroUsage.Reading?
+        if let cli {
+            let text = try await readUsage()
+            reading = try KiroUsage.parseCLIOutput(text)
+        }
+
+        let limits: KiroLimits.CreditLimits?
         do {
-            if let limits = try await enrich() {
-                apply(limits, to: &reading)
-            }
+            limits = try await enrich()
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            Log.usage.debug("kiro: keeping CLI windows after enrichment failure: \(error.localizedDescription, privacy: .public)")
+            limits = nil
+            Log.usage.debug("kiro: enrichment failure: \(UsageStore.sanitizedDescription(for: error), privacy: .public)")
         }
-        lastKnownPlan = reading.plan
 
-        return ProviderSnapshot(
-            id: id,
-            displayName: displayName,
-            glyph: glyph,
-            fidelity: .official,
-            status: .ok,
-            windows: reading.windows,
-            // Credits only. Bonus is a wallet in the tooltip, not a weekly
-            // window — wiring it to `weeklyID` would draw a second ring for a
-            // number that is not a week.
-            headlineID: "credits",
-            plan: reading.plan?.nonEmptyPlan
-        )
+        if var r = reading {
+            if let limits {
+                apply(limits, to: &r)
+            }
+            lastKnownPlan = r.plan
+            return ProviderSnapshot(
+                id: id,
+                displayName: displayName,
+                glyph: glyph,
+                fidelity: .official,
+                status: .ok,
+                windows: r.windows,
+                headlineID: "credits",
+                plan: r.plan?.nonEmptyPlan
+            )
+        } else if let limits {
+            var standaloneReading = KiroUsage.Reading(plan: nil, windows: [], hasUsageMetrics: false)
+            apply(limits, to: &standaloneReading)
+            lastKnownPlan = nil
+            return ProviderSnapshot(
+                id: id,
+                displayName: displayName,
+                glyph: glyph,
+                fidelity: .official,
+                status: .ok,
+                windows: standaloneReading.windows,
+                headlineID: "credits",
+                plan: nil
+            )
+        } else {
+            throw UsageProviderError.nothingMetered(L10n.t("Kiro CLI execution is disabled for privacy; no local API credentials found."))
+        }
     }
 
     /// Locate kiro-cli and ask `/usage`, or use the injected output a test
@@ -120,15 +138,11 @@ actor KiroProvider: UsageProvider {
             work = cli
         } else {
             guard let binary = locateBinary() else {
-                // Not installed is not signed out. `needsAuth` would put a
-                // login prompt on a Mac that has never had kiro-cli.
                 throw UsageProviderError.nothingMetered(L10n.t("Kiro CLI is not installed"))
             }
             let runner = KiroCLI(binary: binary, output: { try KiroCLI.run(binary: binary) })
             work = { try runner.output() }
         }
-        // Reading a pipe blocks the thread it is on; this actor also does the
-        // HTTP enrichment and must not sit behind that.
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 continuation.resume(with: Result { try work() })
@@ -148,11 +162,12 @@ actor KiroProvider: UsageProvider {
         let response: URLResponse
         do {
             Log.usage.debug("POST GetUsageLimits")
-            (data, response) = try await session.data(for: request)
+            try NetworkPolicy.validate(request: request, for: .kiro)
+            (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .kiro))
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            Log.usage.debug("GetUsageLimits failed: \(error.localizedDescription, privacy: .public)")
+            Log.usage.debug("GetUsageLimits failed: \(UsageStore.sanitizedDescription(for: error), privacy: .public)")
             return nil
         }
 

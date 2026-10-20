@@ -1,5 +1,5 @@
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 /// Catalog lookups with an explicit locale. English is the source; Chinese,
 /// French and Brazilian Portuguese assertions here only prove a translation
@@ -691,7 +691,7 @@ final class LocalizationTests: XCTestCase {
     func testEveryOfferedLanguageResolves() {
         XCTAssertEqual(
             AppLanguage.allCases.map(\.rawValue),
-            ["system", "en", "fr", "de", "id", "ja", "ko", "pt-BR", "ru", "zh-Hans",
+            ["en", "system", "fr", "de", "id", "ja", "ko", "pt-BR", "ru", "zh-Hans",
              "zh-Hant", "uk", "uz", "tr"]
         )
         XCTAssertNil(AppLanguage.system.locale)
@@ -710,8 +710,8 @@ final class LocalizationTests: XCTestCase {
             "Pengaturan…"
         )
         XCTAssertEqual(
-            L10n.t("Quit Codenotch", locale: indonesian),
-            "Keluar dari Codenotch"
+            L10n.t("Quit NotchAgent", locale: indonesian),
+            "Keluar dari NotchAgent"
         )
     }
 

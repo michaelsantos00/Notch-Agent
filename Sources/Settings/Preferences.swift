@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import Security
 import ServiceManagement
 import os
 
@@ -49,6 +50,22 @@ final class Preferences: ObservableObject {
 
     @Published var phoneLinkPort: Int {
         didSet { defaults.set(phoneLinkPort, forKey: Keys.phoneLinkPort) }
+    }
+
+    /// Explicit local history indexing preference. Default is OFF for this private fork.
+    /// Indexing transcripts is strictly confined to explicitly enabled account IDs.
+    @Published var isHistoryIndexingEnabled: Bool {
+        didSet { defaults.set(isHistoryIndexingEnabled, forKey: Keys.historyIndexingEnabled) }
+    }
+
+    /// Account IDs explicitly approved for local transcript indexing and attribution.
+    @Published var enabledHistoryAccountIDs: Set<String> {
+        didSet { defaults.set(Array(enabledHistoryAccountIDs), forKey: Keys.enabledHistoryAccountIDs) }
+    }
+
+    /// Retention threshold in days for local cost history. 0 = keep indefinitely.
+    @Published var historyRetentionDays: Int {
+        didSet { defaults.set(historyRetentionDays, forKey: Keys.historyRetentionDays) }
     }
 
 
@@ -215,7 +232,7 @@ final class Preferences: ObservableObject {
     /// when the cache was written seconds ago — and on a provider that rate
     /// limits, one request too many is answered with a back-off that then holds
     /// a number older than the cache would have been. Worth having for somebody
-    /// comparing Codenotch against a vendor's own dashboard figure by figure;
+    /// comparing NotchAgent against a vendor's own dashboard figure by figure;
     /// not worth making everybody pay for.
     @Published var asksProviderOnLook: Bool {
         didSet { defaults.set(asksProviderOnLook, forKey: Keys.asksProviderOnLook) }
@@ -365,7 +382,7 @@ final class Preferences: ObservableObject {
     /// stays out of the bar until someone puts it there.
     ///
     /// Never written alongside `connectedProviders`: one is what the menu bar
-    /// shows, the other what Codenotch reads, and `MenuBarLimits` says why the
+    /// shows, the other what NotchAgent reads, and `MenuBarLimits` says why the
     /// two stay apart.
     @Published private(set) var menuBarProviders: Set<String>? {
         didSet {
@@ -482,6 +499,20 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(minimaxRegion.rawValue, forKey: Keys.minimaxRegion) }
     }
 
+    /// Where Ollama's cloud usage comes from: request counts through the API
+    /// key, or the 5-hour and weekly percentages through a browser's
+    /// ollama.com sign-in. Absent means never chosen, which is the API key —
+    /// nothing reads a browser until someone asks it to.
+    @Published var ollamaUsageSource: OllamaUsageSource {
+        didSet { defaults.set(ollamaUsageSource.rawValue, forKey: Keys.ollamaUsageSource) }
+    }
+
+    /// Which browser profile's ollama.com sign-in to read: `OllamaCloudSource
+    /// .automatic`, or a `BrowserCookies.Store.id` such as "chrome/Profile 1".
+    @Published var ollamaCookieStore: String {
+        didSet { defaults.set(ollamaCookieStore, forKey: Keys.ollamaCookieStore) }
+    }
+
     /// The version whose changes have already been shown.
     ///
     /// Written when the What's New dialogue is dismissed rather than when it
@@ -566,11 +597,16 @@ final class Preferences: ObservableObject {
         /// A new key, so there is nothing under the old app name to migrate.
         static let geminiAPIMonthlyTokenBudget = "geminiAPIMonthlyTokenBudget"
         static let minimaxRegion = "minimaxRegion"
+        static let ollamaUsageSource = "ollamaUsageSource"
+        static let ollamaCookieStore = "ollamaCookieStore"
         static let antigravityHeadlineLimit = "antigravityHeadlineLimit"
         static let antigravityHeadlineModel = "antigravityHeadlineModel"
         static let deepSeekPricingEnabled = "deepSeekPricingEnabled"
         static let deepSeekPricingSchedule = "deepSeekPricingSchedule"
         static let showCodexExtraLimits = "showCodexExtraLimits"
+        static let historyIndexingEnabled = "historyIndexingEnabled"
+        static let enabledHistoryAccountIDs = "historyEnabledAccounts"
+        static let historyRetentionDays = "historyRetentionDays"
     }
 
     /// The budget read straight from disk, off the main actor.
@@ -689,6 +725,17 @@ final class Preferences: ObservableObject {
         return region
     }
 
+    /// Read by the provider, an actor, for the reason `storedMinimaxRegion` is.
+    nonisolated static func storedOllamaUsageSource(
+        defaults: UserDefaults = .standard
+    ) -> OllamaUsageSource {
+        defaults.string(forKey: Keys.ollamaUsageSource).flatMap(OllamaUsageSource.init(rawValue:)) ?? .apiKey
+    }
+
+    nonisolated static func storedOllamaCookieStore(defaults: UserDefaults = .standard) -> String {
+        defaults.string(forKey: Keys.ollamaCookieStore) ?? OllamaCloudSource.automatic
+    }
+
     /// True the very first time this copy runs, and never again.
     ///
     /// Deliberately *not* inferred from "there are no readings yet" — that is
@@ -697,7 +744,7 @@ final class Preferences: ObservableObject {
     /// at all.
     let isFirstLaunch: Bool
 
-    /// The bundle identifier before the app was renamed to Codenotch.
+    /// The bundle identifier before the app was renamed to NotchAgent.
     ///
     /// A bundle id is the name of the defaults domain, so renaming the app
     /// silently moved every setting to a new, empty one — connection choices,
@@ -876,7 +923,7 @@ final class Preferences: ObservableObject {
             .flatMap(AntigravityHeadlineLimit.init(rawValue:)) ?? .automatic
         self.antigravityHeadlineModel = defaults.string(forKey: Keys.antigravityHeadlineModel)
             .flatMap(AntigravityHeadlineModel.init(rawValue:)) ?? .gemini
-        // Follow the Mac unless the user explicitly chooses a Codenotch colour.
+        // Follow the Mac unless the user explicitly chooses a NotchAgent colour.
         // Off by default: an extra arc in a 44pt circle is a change to how
         // every reading looks, and nobody asked for it on their behalf.
         self.weeklyRingDashed = defaults.object(forKey: Keys.weeklyRingDashed) as? Bool ?? false
@@ -900,9 +947,9 @@ final class Preferences: ObservableObject {
         self.watchLimit = min(max(storedWatchLimit, 0.01), critical - 0.01)
         self.colorTransitionStyle = defaults.string(forKey: Keys.colorTransitionStyle)
             .flatMap(ColorTransitionStyle.init(rawValue:)) ?? .hardStep
-        // Absent means never chosen, which is follow-the-Mac.
+        // Unset or invalid choices use the app's American English source copy.
         self.language = defaults.string(forKey: L10n.languageDefaultsKey)
-            .flatMap(AppLanguage.init(rawValue:)) ?? .system
+            .flatMap(AppLanguage.init(rawValue:)) ?? .english
         // Absent means nothing has been shown yet, which is true of a fresh
         // install — so the current release reads as new to it.
         self.lastSeenVersion = defaults.string(forKey: Keys.lastSeenVersion)
@@ -930,6 +977,17 @@ final class Preferences: ObservableObject {
             ?? SessionChime.defaultBlocked
         self.geminiAPIMonthlyTokenBudget = Self.storedGeminiAPIMonthlyTokenBudget(defaults: defaults)
         self.minimaxRegion = Self.storedMinimaxRegion(defaults: defaults)
+        self.ollamaUsageSource = Self.storedOllamaUsageSource(defaults: defaults)
+        self.ollamaCookieStore = Self.storedOllamaCookieStore(defaults: defaults)
+        self.isHistoryIndexingEnabled = defaults.bool(forKey: Keys.historyIndexingEnabled)
+        self.enabledHistoryAccountIDs = Set(defaults.stringArray(forKey: Keys.enabledHistoryAccountIDs) ?? [])
+        if let obj = defaults.object(forKey: Keys.historyRetentionDays) as? Int {
+            self.historyRetentionDays = obj
+        } else if let num = defaults.object(forKey: Keys.historyRetentionDays) as? NSNumber {
+            self.historyRetentionDays = num.intValue
+        } else {
+            self.historyRetentionDays = 30
+        }
         if let data = defaults.data(forKey: Keys.customEndpoints),
            let list = try? JSONDecoder().decode([CustomEndpoint].self, from: data) {
             self.customEndpoints = Self.movingLegacyKeysToKeychain(list, defaults: defaults)
@@ -1097,6 +1155,24 @@ final class Preferences: ObservableObject {
         seenProviders.insert(providerID)
     }
 
+    /// Whether transcript indexing and cost attribution are active for this account.
+    /// Requires global history indexing to be ON, this account to be explicitly enabled,
+    /// and the account's provider to be connected.
+    func isHistoryEnabled(for accountID: String) -> Bool {
+        guard isHistoryIndexingEnabled else { return false }
+        guard enabledHistoryAccountIDs.contains(accountID) else { return false }
+        return isConnected(accountID)
+    }
+
+    /// Explicitly enables or disables local history indexing for an account.
+    func setHistoryEnabled(_ enabled: Bool, for accountID: String) {
+        if enabled {
+            enabledHistoryAccountIDs.insert(accountID)
+        } else {
+            enabledHistoryAccountIDs.remove(accountID)
+        }
+    }
+
     /// Fold this Mac's current provider ids into the stored on-list.
     ///
     /// First launch writes Claude and Codex. An upgrade from `hiddenProviders`
@@ -1154,21 +1230,174 @@ final class Preferences: ObservableObject {
     /// Not tied to uninstalling: a reinstall is indistinguishable from an
     /// update, and wiping data on every Sparkle update would be catastrophic.
     /// It has to be something the user asks for.
-    static func eraseAllData() {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.vinz.codenotch"
-        UserDefaults.standard.removePersistentDomain(forName: bundleID)
-        UserDefaults.standard.synchronize()
+    /// App-owned Keychain service identifiers that this app created and manages.
+    public struct KeychainTarget: Equatable, Hashable {
+        public let service: String
+        public let account: String?
 
-        let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first
-        for relative in ["Caches/\(bundleID)",
-                         "WebKit/\(bundleID)",
-                         "HTTPStorages/\(bundleID)",
-                         "HTTPStorages/\(bundleID).binarycookies",
-                         "Saved Application State/\(bundleID).savedState"] {
-            if let url = library?.appendingPathComponent(relative) {
-                try? FileManager.default.removeItem(at: url)
+        public init(service: String, account: String? = nil) {
+            self.service = service
+            self.account = account
+        }
+    }
+
+    /// App-owned Keychain targets that this app created and manages.
+    /// Generic services (ollama-api-key, lmstudio-api-token, etc.) specify account="codenotch"
+    /// so they only delete NotchAgent's items without deleting items created by other apps.
+    public static let appOwnedKeychainTargets: [KeychainTarget] = [
+        KeychainTarget(service: "com.vinzdg.codenotch.custom-endpoint", account: nil),
+        KeychainTarget(service: "com.codenotch.phonelink.device", account: nil),
+        KeychainTarget(service: "ollama-api-key", account: "codenotch"),
+        KeychainTarget(service: "lmstudio-api-token", account: "codenotch"),
+        KeychainTarget(service: "apify-api-token", account: "codenotch"),
+        KeychainTarget(service: "minimax-api-key", account: "codenotch"),
+        KeychainTarget(service: "minimax-session-cookie", account: "codenotch")
+    ]
+
+    /// Legacy service list kept for backwards-compatibility checks.
+    public static var appOwnedKeychainServices: [String] {
+        appOwnedKeychainTargets.map(\.service)
+    }
+
+    /// Borrowed provider credentials that are owned by external CLIs or tools
+    /// (e.g. Anthropic's Claude CLI, Cursor Agent, Apify CLI, Google Gemini CLI).
+    /// These MUST NEVER be deleted by NotchAgent.
+    public static let borrowedKeychainServices: Set<String> = [
+        "Claude Code-credentials",
+        "claude-code",
+        "cursor-agent",
+        "@apify/cli",
+        "com.apify.cli",
+        "gemini"
+    ]
+
+    public struct EraseResult {
+        public var success: Bool = true
+        public var removedPaths: [String] = []
+        public var failedPaths: [(path: String, error: String)] = []
+        public var removedKeychainServices: [String] = []
+        public var failedKeychainServices: [(service: String, error: String)] = []
+        public var defaultsCleared: Bool = false
+        public var writersQuiesced: Bool = false
+
+        public var errors: [String] {
+            failedPaths.map { "\($0.path): \($0.error)" } +
+            failedKeychainServices.map { "\($0.service): \($0.error)" }
+        }
+    }
+
+    /// Completely erase all app-owned data, caches, settings, and app-owned credentials.
+    ///
+    /// Quiesces active writers, clears `UserDefaults`, removes `Application Support/Codenotch`,
+    /// removes cache/WebKit/HTTPStorage/Saved Application State directories, and removes
+    /// app-owned Keychain items (scoped to account="codenotch" for generic services).
+    /// Borrowed provider credentials (Claude, Cursor, Apify, etc.) are strictly preserved.
+    ///
+    /// Supports dependency injection for testing fixtures so real user files and real
+    /// Keychain services are never touched during test execution.
+    @MainActor
+    @discardableResult
+    public static func eraseAllData(
+        bundleID: String = Bundle.main.bundleIdentifier ?? "com.vinz.codenotch",
+        libraryDirectory: URL? = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first,
+        appSupportDirectory: URL? = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
+        defaults: UserDefaults = .standard,
+        keychainDeleter: ((_ service: String, _ account: String?) throws -> Void)? = nil,
+        quiesceWriters: (() async throws -> Void)? = nil
+    ) async -> EraseResult {
+        var result = EraseResult()
+
+        // 1. Quiesce writers safely: await and drain quiescence BEFORE deletion
+        if let quiesce = quiesceWriters {
+            do {
+                try await quiesce()
+                result.writersQuiesced = true
+            } catch {
+                result.failedPaths.append((path: "quiesce", error: error.localizedDescription))
+                result.success = false
+                return result
+            }
+        } else {
+            Costs.detach()
+            CostModels.stopAll()
+            result.writersQuiesced = true
+        }
+
+        // 2. Remove defaults
+        defaults.removePersistentDomain(forName: bundleID)
+        defaults.synchronize()
+        result.defaultsCleared = true
+
+        let fm = FileManager.default
+
+        // 3. Remove Application Support/Codenotch
+        if let appSupport = appSupportDirectory {
+            let appSupportDir = appSupport.appendingPathComponent("Codenotch")
+            if fm.fileExists(atPath: appSupportDir.path) {
+                do {
+                    try fm.removeItem(at: appSupportDir)
+                    result.removedPaths.append(appSupportDir.path)
+                } catch {
+                    result.failedPaths.append((path: appSupportDir.path, error: error.localizedDescription))
+                    result.success = false
+                }
             }
         }
+
+        // 4. Remove Library cache, webkit, httpstorages, saved application state
+        if let library = libraryDirectory {
+            for relative in [
+                "Caches/\(bundleID)",
+                "WebKit/\(bundleID)",
+                "HTTPStorages/\(bundleID)",
+                "HTTPStorages/\(bundleID).binarycookies",
+                "Saved Application State/\(bundleID).savedState"
+            ] {
+                let url = library.appendingPathComponent(relative)
+                if fm.fileExists(atPath: url.path) {
+                    do {
+                        try fm.removeItem(at: url)
+                        result.removedPaths.append(url.path)
+                    } catch {
+                        result.failedPaths.append((path: url.path, error: error.localizedDescription))
+                        result.success = false
+                    }
+                }
+            }
+        }
+
+        // 5. Remove app-owned Keychain targets (preserve borrowed provider credentials)
+        for target in appOwnedKeychainTargets {
+            guard !borrowedKeychainServices.contains(target.service) else { continue }
+            let descriptor = target.account != nil ? "\(target.service) (\(target.account!))" : target.service
+            if let customDeleter = keychainDeleter {
+                do {
+                    try customDeleter(target.service, target.account)
+                    result.removedKeychainServices.append(descriptor)
+                } catch {
+                    result.failedKeychainServices.append((service: descriptor, error: error.localizedDescription))
+                    result.success = false
+                }
+            } else {
+                var query: [CFString: Any] = [
+                    kSecClass: kSecClassGenericPassword,
+                    kSecAttrService: target.service
+                ]
+                if let account = target.account {
+                    query[kSecAttrAccount] = account
+                }
+                let status = SecItemDelete(query as CFDictionary)
+                if status == errSecSuccess || status == errSecItemNotFound {
+                    result.removedKeychainServices.append(descriptor)
+                } else {
+                    let errMsg = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
+                    result.failedKeychainServices.append((service: descriptor, error: errMsg))
+                    result.success = false
+                }
+            }
+        }
+
+        return result
     }
 
     // MARK: - Login item
@@ -1189,7 +1418,7 @@ final class Preferences: ObservableObject {
             // Commonly refused for an app running from a build directory rather
             // than /Applications, which is worth saying plainly.
             Log.usage.error("launch at login failed: \(error.localizedDescription, privacy: .public)")
-            launchAtLoginProblem = L10n.t("macOS refused this — try moving Codenotch to /Applications.")
+            launchAtLoginProblem = L10n.t("macOS refused this — try moving NotchAgent to /Applications.")
             launchAtLogin = Self.isRegisteredForLogin
         }
     }

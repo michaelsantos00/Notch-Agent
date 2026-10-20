@@ -36,7 +36,7 @@ enum L10n {
         let isTest = NSClassFromString("XCTestCase") != nil
 
         // Under XCTest the host *is* the app, so the production store here is
-        // the preferences of the installed copy of Codenotch. Choosing 简体中文
+        // the preferences of the installed copy of NotchAgent. Choosing 简体中文
         // in Settings would otherwise decide what a hundred copy assertions
         // compare against — which it did, twice, mid-session. A test that
         // means to exercise the override injects its own store and is
@@ -49,12 +49,8 @@ enum L10n {
             return Locale(identifier: "en")
         }
 
-        if let stored,
-           let language = AppLanguage(rawValue: stored),
-           let locale = language.locale {
-            return locale
-        }
-        return .current
+        let language = stored.flatMap(AppLanguage.init(rawValue:)) ?? .english
+        return language.locale ?? .current
     }
 
     /// One bundle per language, resolved once.
@@ -103,13 +99,8 @@ enum L10n {
     }
 
     static func apply(_ language: AppLanguage) {
-        // Absence, not the string "system": the XCTest English pin treats a
-        // missing key as follow-the-Mac.
-        if language == .system {
-            defaults.removeObject(forKey: languageDefaultsKey)
-        } else {
-            defaults.set(language.rawValue, forKey: languageDefaultsKey)
-        }
+        // Persist Follow System explicitly so absence can mean American English.
+        defaults.set(language.rawValue, forKey: languageDefaultsKey)
         NotificationCenter.default.post(name: didChange, object: nil)
     }
 }

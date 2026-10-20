@@ -1,5 +1,27 @@
 import Foundation
+import Darwin
 import SQLite3
+import os
+
+public enum CostStoreError: LocalizedError, Equatable {
+    case databaseClosed
+    case transactionFailed(String)
+    case executionFailed(String)
+    case checkpointFailed(String)
+    case vacuumFailed(String)
+    case permissionsFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .databaseClosed: return "Database is closed"
+        case .transactionFailed(let msg): return "Transaction error: \(msg)"
+        case .executionFailed(let msg): return "SQL error: \(msg)"
+        case .checkpointFailed(let msg): return "WAL checkpoint failed: \(msg)"
+        case .vacuumFailed(let msg): return "VACUUM failed: \(msg)"
+        case .permissionsFailed(let msg): return "Permissions error: \(msg)"
+        }
+    }
+}
 
 // MARK: - Types
 
@@ -98,6 +120,7 @@ struct ProjectCost: Identifiable {
 final class CostStore {
     static let unexplainedKey = "__unexplained__"
 
+    let url: URL
     private var db: OpaquePointer?
     let queue = DispatchQueue(label: "com.vinz.codenotch.costs.cost")
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -109,20 +132,70 @@ final class CostStore {
     static let kCacheWrite: Double = 1.25
     static let kCacheRead: Double = 0.1
 
+    private static let logger = Logger(subsystem: "com.vinz.codenotch", category: "costs")
+
     init?(url: URL) {
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                 withIntermediateDirectories: true)
+        self.url = url
+        do {
+            try PrivacyFileProtection.secureDirectory(at: url.deletingLastPathComponent())
+        } catch {
+            Self.logger.error("Failed to secure directory for cost store at \(url.path): \(error.localizedDescription)")
+            return nil
+        }
+        let descriptor = open(url.path, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)
+        guard descriptor >= 0 else { return nil }
+        let secured = fchmod(descriptor, 0o600) == 0
+        close(descriptor)
+        guard secured else { return nil }
         var handle: OpaquePointer?
         guard sqlite3_open_v2(url.path, &handle,
                               SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
-                              nil) == SQLITE_OK, let handle else { return nil }
+                              nil) == SQLITE_OK, let handle else {
+            if let handle { sqlite3_close(handle) }
+            return nil
+        }
         db = handle
+        do {
+            try PrivacyFileProtection.secureDatabase(at: url)
+        } catch {
+            Self.logger.error("Failed to secure database at \(url.path): \(error.localizedDescription)")
+            sqlite3_close(handle)
+            db = nil
+            return nil
+        }
         var ok = false
         queue.sync { ok = migrate() }
-        guard ok else { sqlite3_close(db); return nil }
+        guard ok else {
+            sqlite3_close(handle)
+            db = nil
+            return nil
+        }
+        do {
+            try PrivacyFileProtection.secureDatabase(at: url)
+        } catch {
+            Self.logger.error("Failed to secure database after migration at \(url.path): \(error.localizedDescription)")
+            sqlite3_close(handle)
+            db = nil
+            return nil
+        }
     }
 
-    deinit { if let db { sqlite3_close(db) } }
+    deinit {
+        if let db {
+            _ = sqlite3_exec(db, "PRAGMA wal_checkpoint(TRUNCATE);", nil, nil, nil)
+            sqlite3_close(db)
+        }
+    }
+
+    /// Safely checkpoints the WAL, drains the queue, and closes SQLite handle.
+    func quiesce() {
+        queue.sync {
+            guard let handle = db else { return }
+            _ = exec("PRAGMA wal_checkpoint(TRUNCATE);")
+            sqlite3_close(handle)
+            db = nil
+        }
+    }
 
     // MARK: Schema
 
@@ -183,11 +256,159 @@ final class CostStore {
           path   TEXT    NOT NULL,
           reason TEXT    NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS store_metadata(
+          key   TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
         """
         _ = exec(schema)
         // Databases from 0.6.0-dev predate resets_at; a no-op once the column exists.
         exec("ALTER TABLE quota_sample ADD COLUMN resets_at INTEGER;")
         return true
+    }
+
+    func metadata(_ key: String) -> String? {
+        queue.sync { metadataInternal(key) }
+    }
+
+    private func metadataInternal(_ key: String) -> String? {
+        guard let st = prepare("SELECT value FROM store_metadata WHERE key = ?1") else { return nil }
+        defer { sqlite3_finalize(st) }
+        bind(st, 1, key)
+        guard sqlite3_step(st) == SQLITE_ROW else { return nil }
+        return text(st, 0)
+    }
+
+    @discardableResult
+    private func setMetadataInternal(_ key: String, value: String) -> Bool {
+        guard let st = prepare("INSERT INTO store_metadata(key, value) VALUES(?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value") else { return false }
+        defer { sqlite3_finalize(st) }
+        bind(st, 1, key)
+        bind(st, 2, value)
+        return sqlite3_step(st) == SQLITE_DONE
+    }
+
+    private func lastErrorMessage() -> String {
+        if let db {
+            return String(cString: sqlite3_errmsg(db))
+        }
+        return "No SQLite database handle"
+    }
+
+    func setMetadata(_ key: String, value: String) {
+        queue.sync {
+            _ = setMetadataInternal(key, value: value)
+        }
+    }
+
+    // MARK: - Retention and Clear History
+
+    /// Prunes recorded turn events, quota samples, attributions, boundaries, and errors older than `cutoff`.
+    /// Also prunes stale cursors whose files have not been modified since `cutoff`, as the durable `retention_cutoff_ts`
+    /// metadata prevents backfill resurrection.
+    @discardableResult
+    func prune(olderThan cutoff: Date) throws -> Int {
+        return try queue.sync {
+            guard db != nil else { throw CostStoreError.databaseClosed }
+            let cutoffTs = max(Int(cutoff.timeIntervalSince1970), metadataInternal("retention_cutoff_ts").flatMap(Int.init) ?? 0)
+            guard exec("BEGIN IMMEDIATE;") else {
+                throw CostStoreError.transactionFailed("BEGIN: \(lastErrorMessage())")
+            }
+            guard setMetadataInternal("retention_cutoff_ts", value: String(cutoffTs)) else {
+                _ = exec("ROLLBACK;")
+                throw CostStoreError.executionFailed("Failed to set retention_cutoff_ts: \(lastErrorMessage())")
+            }
+            var deletedEvents = 0
+            func executeDelete(_ sql: String, param: Int64) throws -> Int {
+                guard let st = prepare(sql) else {
+                    _ = exec("ROLLBACK;")
+                    throw CostStoreError.executionFailed("Prepare failed for \(sql): \(lastErrorMessage())")
+                }
+                sqlite3_bind_int64(st, 1, param)
+                guard sqlite3_step(st) == SQLITE_DONE else {
+                    let err = lastErrorMessage()
+                    sqlite3_finalize(st)
+                    _ = exec("ROLLBACK;")
+                    throw CostStoreError.executionFailed("Step failed for \(sql): \(err)")
+                }
+                let count = Int(sqlite3_changes(db))
+                sqlite3_finalize(st)
+                return count
+            }
+            deletedEvents = try executeDelete("DELETE FROM usage_event WHERE ts < ?1", param: Int64(cutoffTs))
+            _ = try executeDelete("DELETE FROM quota_sample WHERE ts < ?1", param: Int64(cutoffTs))
+            _ = try executeDelete("DELETE FROM attribution WHERE t1 < ?1", param: Int64(cutoffTs))
+            _ = try executeDelete("DELETE FROM period_boundary WHERE ts < ?1", param: Int64(cutoffTs))
+            _ = try executeDelete("DELETE FROM parse_error WHERE ts < ?1", param: Int64(cutoffTs))
+            // Prune stale cursors whose files have not been modified since cutoff
+            _ = try executeDelete("DELETE FROM file_cursor WHERE mtime < ?1", param: Int64(cutoffTs))
+
+            guard exec("COMMIT;") else {
+                let err = lastErrorMessage()
+                _ = exec("ROLLBACK;")
+                throw CostStoreError.transactionFailed("COMMIT: \(err)")
+            }
+            guard exec("PRAGMA wal_checkpoint(TRUNCATE);") else {
+                throw CostStoreError.checkpointFailed(lastErrorMessage())
+            }
+            do {
+                try PrivacyFileProtection.secureDatabase(at: url)
+            } catch {
+                throw CostStoreError.permissionsFailed(error.localizedDescription)
+            }
+            return deletedEvents
+        }
+    }
+
+    /// Clears all recorded turn history, quota samples, attributions, boundaries, and errors.
+    /// Sets a `history_cleared_at` boundary timestamp to prevent wholesale resurrection by backfill
+    /// if older transcript files are re-scanned. When `preserveFileCursors` is false, file_cursor path
+    /// metadata is also purged.
+    @discardableResult
+    func clearHistory(preserveFileCursors: Bool = false) throws -> Bool {
+        let nowTs = Int(Date().timeIntervalSince1970)
+        return try queue.sync {
+            guard db != nil else { throw CostStoreError.databaseClosed }
+            guard exec("BEGIN IMMEDIATE;") else {
+                throw CostStoreError.transactionFailed("BEGIN: \(lastErrorMessage())")
+            }
+            func execOrRollback(_ sql: String) throws {
+                guard exec(sql) else {
+                    let err = lastErrorMessage()
+                    _ = exec("ROLLBACK;")
+                    throw CostStoreError.executionFailed("\(sql): \(err)")
+                }
+            }
+            try execOrRollback("DELETE FROM usage_event;")
+            try execOrRollback("DELETE FROM quota_sample;")
+            try execOrRollback("DELETE FROM attribution;")
+            try execOrRollback("DELETE FROM period_boundary;")
+            try execOrRollback("DELETE FROM parse_error;")
+            if !preserveFileCursors {
+                try execOrRollback("DELETE FROM file_cursor;")
+            }
+            guard setMetadataInternal("history_cleared_at", value: String(nowTs)) else {
+                _ = exec("ROLLBACK;")
+                throw CostStoreError.executionFailed("Failed to set history_cleared_at: \(lastErrorMessage())")
+            }
+            guard exec("COMMIT;") else {
+                let err = lastErrorMessage()
+                _ = exec("ROLLBACK;")
+                throw CostStoreError.transactionFailed("COMMIT: \(err)")
+            }
+            guard exec("PRAGMA wal_checkpoint(TRUNCATE);") else {
+                throw CostStoreError.checkpointFailed(lastErrorMessage())
+            }
+            guard exec("VACUUM;") else {
+                throw CostStoreError.vacuumFailed(lastErrorMessage())
+            }
+            do {
+                try PrivacyFileProtection.secureDatabase(at: url)
+            } catch {
+                throw CostStoreError.permissionsFailed(error.localizedDescription)
+            }
+            return true
+        }
     }
 
     // MARK: Low-level helpers (queue-confined)
@@ -236,6 +457,12 @@ final class CostStore {
     /// so an interrupted run never leaves the cursor ahead of the stored rows.
     func commit(events: [UsageEvent], path: String, inode: Int, size: Int, offset: Int, mtime: Double) {
         queue.sync {
+            guard db != nil else { return }
+            let clearedAt = metadataInternal("history_cleared_at").flatMap(Int.init) ?? 0
+            let retentionCutoff = metadataInternal("retention_cutoff_ts").flatMap(Int.init) ?? 0
+            let minAllowedTs = max(clearedAt, retentionCutoff)
+            let eligibleEvents = minAllowedTs > 0 ? events.filter { $0.ts >= minAllowedTs } : events
+
             exec("BEGIN IMMEDIATE;")
             let sql = """
             INSERT INTO usage_event
@@ -249,7 +476,7 @@ final class CostStore {
               cache_write = MAX(usage_event.cache_write, excluded.cache_write);
             """
             if let st = prepare(sql) {
-                for e in events {
+                for e in eligibleEvents {
                     bind(st, 1, e.dedupeKey)
                     sqlite3_bind_int64(st, 2, Int64(e.ts))
                     bind(st, 3, e.sessionId)
@@ -267,7 +494,7 @@ final class CostStore {
                 }
                 sqlite3_finalize(st)
             }
-            if let st = prepare("""
+            if (minAllowedTs == 0 || mtime >= Double(minAllowedTs) || !eligibleEvents.isEmpty), let st = prepare("""
                 INSERT INTO file_cursor(path, inode, size, offset, mtime) VALUES(?1,?2,?3,?4,?5)
                 ON CONFLICT(path) DO UPDATE SET inode=excluded.inode, size=excluded.size,
                                                 offset=excluded.offset, mtime=excluded.mtime;
@@ -281,6 +508,11 @@ final class CostStore {
                 sqlite3_finalize(st)
             }
             exec("COMMIT;")
+            do {
+                try PrivacyFileProtection.secureDatabase(at: url)
+            } catch {
+                Self.logger.error("Failed to secure database after commit at \(self.url.path): \(error.localizedDescription)")
+            }
         }
     }
 
@@ -401,7 +633,7 @@ final class CostStore {
         if t0 > 0 { return t0 }
 
         // Nothing attributed and no reset seen: the period starts at the first
-        // reading we took. Consumption from before Codenotch was running is not ours
+        // reading we took. Consumption from before NotchAgent was running is not ours
         // to explain.
         if let st = prepare("SELECT MIN(ts) FROM quota_sample WHERE window=?1") {
             bind(st, 1, window.rawValue)
@@ -447,8 +679,8 @@ final class CostStore {
 
     /// Attribution for the current period of a window, largest first.
     ///
-    /// Observed deltas only cover the stretches Codenotch was running for. Anything
-    /// else — the app closed, the Mac asleep, a period that began before Codenotch
+    /// Observed deltas only cover the stretches NotchAgent was running for. Anything
+    /// else — the app closed, the Mac asleep, a period that began before NotchAgent
     /// was ever launched — would otherwise leave the list adding up to less than
     /// the percentage on the card. The remainder is therefore spread across the
     /// turns recorded in this period, so the rows always account for the whole of
@@ -468,7 +700,7 @@ final class CostStore {
 
             let latest = lastSample(window)
             // A reset time is the firmer boundary: it tells us where this period
-            // began even if Codenotch never saw the reset happen.
+            // began even if NotchAgent never saw the reset happen.
             if let resets = latest?.resetsAt {
                 periodStart = max(periodStart, resets - Int(window.duration))
             }

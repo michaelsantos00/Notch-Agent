@@ -4,9 +4,9 @@ import SwiftUI
 /// **An update, offered in the notch** — and, taken, installed there.
 ///
 /// Out of the notch like its other cards, its tail on the notch: the app's
-/// icon, "Codenotch 1.19.0 is available" and a line of what is in it, with
+/// icon, "NotchAgent 1.19.0 is available" and a line of what is in it, with
 /// Update, Later and a close. Update turns it into the installing card — the
-/// download's progress, then extracting and installing — until Codenotch
+/// download's progress, then extracting and installing — until NotchAgent
 /// relaunches as the new version. See `Updater`.
 struct UpdateCard: View {
     let prompt: UpdatePrompt
@@ -73,14 +73,14 @@ struct UpdateCard: View {
     private var installing: Bool { prompt.phase != .available }
 
     private var title: String {
-        installing ? L10n.t("Installing Codenotch \(prompt.version)")
-                   : L10n.t("Codenotch \(prompt.version) is available")
+        installing ? L10n.t("Installing NotchAgent \(prompt.version)")
+                   : L10n.t("NotchAgent \(prompt.version) is available")
     }
 
     private var status: String {
         switch prompt.phase {
         case .available:
-            return prompt.notes.isEmpty ? L10n.t("A new version of Codenotch is ready to install.") : prompt.notes
+            return prompt.notes.isEmpty ? L10n.t("A new version of NotchAgent is ready to install.") : prompt.notes
         case .downloading(let share):
             guard let share else { return L10n.t("Downloading…") }
             return L10n.t("Downloading… \(Int((share * 100).rounded()))%")

@@ -1037,53 +1037,8 @@ struct CustomEndpointsSettingsView: View {
         debounceTask?.cancel()
         detectionTask?.cancel()
         isDetectingUsage = false
-
-        guard isDetectionEligible, !hasManuallySelectedSource else { return }
-        guard let endpoint = editingEndpoint, CustomEndpoint.isValidURL(endpoint.baseURL) else {
-            return
-        }
-
-        let draftID = editingDraftID
-        let url = endpoint.baseURL
-        let key = draftAPIKey
-        let header = endpoint.headerKey
-        let auth = endpoint.usageAuthentication
-        let source = endpoint.usageSource
-        let preset = endpoint.usagePreset
-
-        isDetectingUsage = true
-        usageDetectionResult = nil
-
-        debounceTask = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            if Task.isCancelled { return }
-
-            detectionTask = Task {
-                let result = await CustomEndpointNetwork.shared.detectPreset(
-                    baseURL: url,
-                    apiKey: auth == .apiKey ? key : "",
-                    headerKey: header
-                )
-                if Task.isCancelled { return }
-
-                await MainActor.run {
-                    guard editingDraftID == draftID,
-                          editingEndpoint?.baseURL == url,
-                          editingEndpoint?.headerKey == header,
-                          editingEndpoint?.usageAuthentication == auth,
-                          editingEndpoint?.usageSource == source,
-                          editingEndpoint?.usagePreset == preset,
-                          draftAPIKey == key,
-                          !hasManuallySelectedSource else {
-                        isDetectingUsage = false
-                        return
-                    }
-                    isDetectingUsage = false
-                    applyDetectionResult(result)
-                }
-            }
-            await detectionTask?.value
-        }
+        // Automatic background discovery while editing is disabled for privacy
+        // to prevent transmitting draft keys before explicit user Save/authorization.
     }
 
     private func runExplicitDetection() {

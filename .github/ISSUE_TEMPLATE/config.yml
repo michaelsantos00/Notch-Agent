@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Ask a question or discuss ideas
-    url: https://github.com/vinzdg/codenotch/discussions
-    about: Ask questions, share ideas, and engage with the community.
+  - name: NotchAgent project
+    url: https://github.com/michaelsantos00/Notch-Agent
+    about: Source, documentation, and support for this private fork.

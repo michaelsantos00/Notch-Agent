@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
 
 const RELEASE_API: &str = "https://api.github.com/repos/vinzdg/codenotch/releases/latest";
-const INSTALLER_NAME: &str = "Codenotch-Setup.exe";
+const INSTALLER_NAME: &str = "NotchAgent-Setup.exe";
 const UNSET_PUBKEY: &str = "REPLACE_WITH_TAURI_PUBLIC_KEY";
 const CHECK_ERROR: &str = "Could not check for updates";
 const INSTALL_ERROR: &str = "Could not install the update";
@@ -91,7 +91,7 @@ fn latest_windows_release(current: &Version) -> Result<Option<Version>, String> 
     let body = agent
         .get(RELEASE_API)
         .set("Accept", "application/vnd.github+json")
-        .set("User-Agent", "Codenotch-Windows")
+        .set("User-Agent", "NotchAgent-Windows")
         .call()
         .map_err(|e| e.to_string())?
         .into_string()
@@ -324,7 +324,7 @@ mod tests {
 
     fn release(tag: &str, windows: bool) -> String {
         let asset = if windows {
-            r#"[{"name":"Codenotch-Setup.exe"}]"#
+            r#"[{"name":"NotchAgent-Setup.exe"}]"#
         } else {
             "[]"
         };

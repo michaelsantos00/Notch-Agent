@@ -1,6 +1,6 @@
 import XCTest
 import Combine
-@testable import Codenotch
+@testable import NotchAgent
 
 /// A socket that answers from a script, so the monitor's folding of polls and
 /// log lines can be driven without LM Studio.

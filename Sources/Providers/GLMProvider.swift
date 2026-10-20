@@ -27,8 +27,8 @@ actor GLMProvider: UsageProvider {
     /// one row-draw.
     nonisolated(unsafe) private var lastKnownPlan: String?
 
-    init(session: URLSession = .shared, archive: UsageArchive = UsageArchive()) {
-        self.session = session
+    init(session: URLSession? = nil, archive: UsageArchive = UsageArchive()) {
+        self.session = session ?? NetworkPolicy.makeSession(for: .glm)
         self.archive = archive
         self.retryNoEarlierThan = archive.loadBackoffUntil(providerID: id)
     }
@@ -113,8 +113,9 @@ actor GLMProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .glm)
         Log.usage.debug("GET \(url.host ?? "", privacy: .public)/api/monitor/usage/quota/limit")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .glm))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         Log.usage.debug("quota endpoint answered \(status)")
 

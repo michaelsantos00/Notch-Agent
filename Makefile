@@ -8,8 +8,8 @@ export DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
 endif
 endif
 
-PROJECT := Codenotch.xcodeproj
-SCHEME  := Codenotch
+PROJECT := NotchAgent.xcodeproj
+SCHEME  := NotchAgent
 RESOLVED_PACKAGES := $(PROJECT)/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 ARCH    ?= $(shell uname -m)
 DEST    ?= platform=macOS,arch=$(ARCH)
@@ -25,7 +25,7 @@ DEST    ?= platform=macOS,arch=$(ARCH)
 # `grep`, not `grep -c`: `-c` prints "0" rather than nothing when it matches
 # nothing, so `ifeq (,...)` was never true and a machine *without* the
 # certificate fell through to signing with an identity it does not have —
-# "Signing for Codenotch requires a development team", on every target.
+# "Signing for NotchAgent requires a development team", on every target.
 HAS_DEVELOPER_ID := $(shell security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application")
 
 # A personal "Apple Development" certificate, where there is one, is preferred
@@ -89,8 +89,8 @@ verify-deps:
 run: build
 	@APP=$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DEST)' \
 		-configuration Debug -showBuildSettings 2>/dev/null \
-		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/Codenotch.app; \
-	pkill -x Codenotch 2>/dev/null; sleep 0.5; \
+		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/NotchAgent.app; \
+	pkill -x NotchAgent 2>/dev/null; sleep 0.5; \
 	open "$$APP"
 
 # Build a Release .app, sign it with whatever identity is available (Developer
@@ -106,10 +106,10 @@ install: gen
 		-configuration Release $(DEV_SIGN) build
 	@APP=$$(xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DEST)' \
 		-configuration Release -showBuildSettings 2>/dev/null \
-		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/Codenotch.app; \
-	pkill -x Codenotch || true; \
+		| awk -F' = ' '/ BUILT_PRODUCTS_DIR/ {print $$2; exit}')/NotchAgent.app; \
+	pkill -x NotchAgent || true; \
 	cp -R "$$APP" /Applications/; \
-	open /Applications/Codenotch.app
+	open /Applications/NotchAgent.app
 
 clean:
 	rm -rf build DerivedData $(PROJECT)
@@ -127,7 +127,7 @@ clean:
 # → App-Specific Passwords. Not your Apple ID password.
 
 RELEASE_DIR := build/release
-APP_NAME    := Codenotch
+APP_NAME    := NotchAgent
 # The label of the stored notarytool credential in the login keychain, not
 # anything to do with the app's name — it was created before the rename and
 # renaming the variable is what broke `make release` after it. Recreating it
@@ -144,7 +144,7 @@ archive: gen
 	rm -rf $(RELEASE_DIR)
 	mkdir -p $(RELEASE_DIR)
 	@# Spotlight indexes build output as installed applications, so every
-	@# release leaves extra "Codenotch" entries in app search next to the
+	@# release leaves extra "NotchAgent" entries in app search next to the
 	@# real one in /Applications. This stops the whole tree being indexed.
 	@touch build/.metadata_never_index
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DEST)' \
@@ -183,8 +183,8 @@ dmg: archive
 		$(DMG) $(RELEASE_DIR)/stage
 	codesign --force --sign "Developer ID Application" --timestamp $(DMG)
 	@# The app is inside the dmg now. Leaving the loose copies around is how
-	@# three spare "Codenotch" entries end up in Spotlight; everything
-	@# downstream (notarize, verify, appcast) works from the dmg alone.
+	@# three spare "NotchAgent" entries end up in Spotlight; everything
+	@# downstream (notarize, verify) works from the dmg alone.
 	rm -rf $(RELEASE_DIR)/stage $(RELEASE_DIR)/$(APP_NAME).app
 
 # Submits and waits. `--wait` blocks until Apple answers, which is usually a
@@ -193,52 +193,15 @@ notarize: dmg
 	xcrun notarytool submit $(DMG) --keychain-profile $(NOTARY_PROFILE) --wait
 	xcrun stapler staple $(DMG)
 
-# Sparkle ships its tools inside the resolved package artifacts.
-SPARKLE_BIN = $(shell dirname $$(find $$HOME/Library/Developer/Xcode/DerivedData/Codenotch-*/SourcePackages/artifacts/sparkle -name generate_appcast 2>/dev/null | head -1))
+# This private build has no update feed; distribution is manual.
+appcast:
+	@echo "NotchAgent installs updates manually; no appcast is generated."
 
-# The feed customers' copies poll. Signs each update with the EdDSA private key
-# in the login keychain — Sparkle installs nothing that key did not sign, so a
-# compromised host cannot push code.
-#
-# Writes into docs/, which GitHub Pages serves. The dmg goes there too, so the
-# URL the appcast advertises is the one the file actually sits at — a mismatch
-# is the usual reason an update downloads and then fails to verify.
-# NOT docs/ — that holds the design frames and specs, and GitHub Pages serves
-# whatever it is pointed at. Publishing from there would put the whole design
-# history on the public web alongside the download.
-PAGES_DIR := site
-# Where the dmg actually sits. The enclosure URL the appcast advertises has to
-# match it exactly, or an update downloads and then fails to verify.
-DOWNLOAD_PREFIX := https://hivinz.com/
-
-appcast: $(DMG)
-	@test -n "$(SPARKLE_BIN)" || (echo "Sparkle tools not found — run make build first" && exit 1)
-	mkdir -p $(PAGES_DIR)
-	@# Rebuilt from what is actually in the folder, never merged into the old
-	@# one — generate_appcast preserves entries it already knows, and left the
-	@# previous version advertised at a URL now serving a different file, with
-	@# a signature that could never verify. The old dmg goes for the same
-	@# reason: generate_appcast reads the whole folder, so a leftover would be
-	@# advertised as a version of its own.
-	rm -f $(PAGES_DIR)/appcast.xml $(PAGES_DIR)/*.dmg
-	@# The name carries the version, so the download URL is new every release.
-	@# Under one constant name each release put a different installer at the
-	@# same URL, and anything caching it — a browser, a proxy, a CDN — went on
-	@# serving the build before it. That reads as "the release shipped the old
-	@# installer" (#386) rather than as the stale copy it is, and it costs a
-	@# release to disprove. generate_appcast takes the enclosure URL from the
-	@# filename, so versioning the name is the whole of it. Sparkle fetches
-	@# that same URL, so a cached body could serve a stale update to the
-	@# updater as well as to a browser.
-	cp $(DMG) $(PAGES_DIR)/$(APP_NAME)-$(VERSION).dmg
-	$(SPARKLE_BIN)/generate_appcast $(PAGES_DIR) --download-url-prefix $(DOWNLOAD_PREFIX)
-	@echo "Publish by committing $(PAGES_DIR)/ and pushing."
-
-release: notarize verify-release appcast
+release: notarize verify-release
 	@echo "Notarized: $(DMG)"
 
 # The GitHub release page is where someone who has never installed the app
-# looks first; the appcast feed is only ever read by copies already running.
+# looks first; this private build installs updates manually.
 # The same notarized dmg belongs in both, and until it was in both the release
 # pages carried no assets at all — leaving a full Xcode install as the only way
 # to try the app.
@@ -299,7 +262,7 @@ build-ci: gen
 	rm -rf $(CI_DIR)
 	mkdir -p $(CI_DIR)
 	@# Same reason as `archive`: without this, every build leaves spare
-	@# "Codenotch" entries in Spotlight next to the installed app.
+	@# "NotchAgent" entries in Spotlight next to the installed app.
 	@touch build/.metadata_never_index
 	@# The one entitlement an ad-hoc build cannot do without. The hardened
 	@# runtime turns on library validation, which will only load a library
@@ -313,7 +276,7 @@ build-ci: gen
 	@#   ... not valid for use in process: mapping process and mapped file
 	@#   (non-platform) have different Team IDs
 	@#
-	@# which macOS reports to the user as "Codenotch cannot be opened because
+	@# which macOS reports to the user as "NotchAgent cannot be opened because
 	@# of a problem". A Developer ID build has no such trouble: one identity
 	@# signs the app and re-signs the framework, so the Team IDs do match, and
 	@# this is the single difference that has to be relaxed to make up for not

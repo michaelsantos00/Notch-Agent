@@ -1,7 +1,7 @@
 import SQLite3
 import SwiftUI
 import XCTest
-@testable import Codenotch
+@testable import NotchAgent
 
 final class DevinUsageTests: XCTestCase {
     /// GetUserStatus quota shape, with synthetic values and no account data.

@@ -33,7 +33,7 @@ fn age_secs(t: SystemTime) -> u64 {
 
 pub fn run() -> String {
     let mut o = String::new();
-    o += &format!("== Codenotch doctor v{} ==\n", env!("CARGO_PKG_VERSION"));
+    o += &format!("== NotchAgent doctor v{} ==\n", env!("CARGO_PKG_VERSION"));
 
     let cfg = crate::config::load();
     o += &format!(
@@ -44,7 +44,7 @@ pub fn run() -> String {
     );
 
     match std::net::TcpListener::bind(("127.0.0.1", cfg.port)) {
-        Ok(_) => o += "port: free — no Codenotch instance is running\n",
+        Ok(_) => o += "port: free — no NotchAgent instance is running\n",
         Err(_) => o += "port: in use — an instance is already running (quit it from the tray before starting a new build)\n",
     }
 

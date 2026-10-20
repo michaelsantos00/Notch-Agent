@@ -147,9 +147,9 @@ final class WebSessionProvider: NSObject, UsageProvider {
     nonisolated let id: String
     nonisolated let displayName: String
     nonisolated let glyph: ProviderGlyph
-    /// A browser-session provider is the one kind that really can sign you in:
-    /// the session lives in its own WebView, so it can open one and clear one.
-    nonisolated var signInRoute: SignInRoute { .modal(name: displayName) }
+    nonisolated var signInRoute: SignInRoute {
+        .guidance(L10n.t("Embedded browser sign-in for \(displayName) is disabled in this private build to prevent unrestricted web traffic."))
+    }
 
     /// A successful browser probe is the account identity this provider can
     /// honestly expose. DeepSeek does not include an email or plan in the
@@ -291,128 +291,27 @@ final class WebSessionProvider: NSObject, UsageProvider {
     }
 
     private func ensureLoaded() async throws {
-        let webView = makeWebViewIfNeeded()
-        if isLoaded, Self.matchesOrigin(webView.url, expected: site.origin) { return }
-        webView.load(URLRequest(url: site.origin))
-        for _ in 0..<40 {
-            try await Task.sleep(nanoseconds: 250_000_000)
-            if Self.matchesOrigin(webView.url, expected: site.origin), !webView.isLoading {
-                isLoaded = true
-                return
-            }
-        }
-        Log.usage.error("\(self.site.id, privacy: .public) page never reached a same-origin state")
-        throw UsageProviderError.badResponse(status: 0)
+        throw UsageProviderError.nothingMetered(L10n.t("Browser-based session provider is disabled in this private build."))
     }
 
     // MARK: - Fetching
 
     func fetchSnapshot() async throws -> ProviderSnapshot {
-        guard hasSignedIn else { throw UsageProviderError.needsAuth }
-        try await ensureLoaded()
-        guard let webView else { throw UsageProviderError.needsAuth }
-
-        // `callAsyncJavaScript`, not `evaluateJavaScript`. The latter returns
-        // whatever the last expression evaluates to and never awaits it, so an
-        // async body hands back an unresolved Promise — an unsupported type,
-        // which surfaces as an opaque failure instead of the response.
-        let result: Any?
-        do {
-            result = try await webView.callAsyncJavaScript(
-                site.script, arguments: [:], in: nil, contentWorld: .page
-            )
-        } catch {
-            Log.usage.error("\(self.site.id, privacy: .public) fetch script failed: \(error.localizedDescription, privacy: .public)")
-            throw UsageProviderError.badResponse(status: 0)
-        }
-
-        guard let text = result as? String,
-              let data = text.data(using: .utf8),
-              let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let status = envelope["status"] as? Int,
-              let body = envelope["body"] as? String
-        else {
-            Log.usage.error("\(self.site.id, privacy: .public) response unreadable: \(String(describing: result), privacy: .public)")
-            throw UsageProviderError.badResponse(status: 0)
-        }
-
-        if Self.isAuthenticationFailureStatus(status) {
-            // Not signed in, or a challenge wants a human. Same remedy either way.
-            hasSignedIn = false
-            throw UsageProviderError.needsAuth
-        }
-        guard (200..<300).contains(status) else {
-            throw UsageProviderError.badResponse(status: status)
-        }
-
-        // Recorded verbatim so a parser can be written against the real thing.
-        // Not for sites whose response carries account details beyond the
-        // numbers: DeepSeek's, and QianwenAI's console envelope, whose other
-        // fields are undocumented.
-        if ["deepseek", "qianwenai"].contains(site.id) {
-            Log.usage.notice("\(self.site.id, privacy: .public) usage response received")
-        } else {
-            Log.usage.notice("\(self.site.id, privacy: .public) usage -> \(body.prefix(1200), privacy: .public)")
-        }
-        if let probes = envelope["probes"] as? String {
-            Log.usage.notice("\(self.site.id, privacy: .public) probes -> \(probes.prefix(2600), privacy: .public)")
-        }
-
-        let windows: [LimitWindow]
-        let usageDetail: ProviderUsageDetail?
-        do {
-            windows = try site.parse(body)
-            usageDetail = try site.detailParse?(body)
-        } catch UsageProviderError.needsAuth {
-            // HTTP 200 with a 1004 body that the page script missed: still a
-            // dead session, not a signed-in parse error.
-            hasSignedIn = false
-            throw UsageProviderError.needsAuth
-        }
-
-        return ProviderSnapshot(
-            id: id,
-            displayName: displayName,
-            glyph: glyph,
-            fidelity: site.fidelity,
-            status: .ok,
-            windows: windows,
-            headlineID: site.headlineID,
-            weeklyID: site.weeklyID,
-            usageDetail: usageDetail
-        )
+        throw UsageProviderError.nothingMetered(L10n.t("Browser-based session provider is disabled in this private build."))
     }
 
     /// Loads a page and reports the API calls it made. A discovery tool, not
-    /// part of a refresh.
+    /// part of a refresh. Disabled in this private build.
     func recordCalls(on url: URL, settleFor seconds: Double = 8) async -> [String] {
-        let webView = makeWebViewIfNeeded()
-        webView.load(URLRequest(url: url))
-        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-        isLoaded = false   // the page moved; the next refresh reloads its own
-        let result = try? await webView.callAsyncJavaScript(
-            "return JSON.stringify(window.__notchCalls || []);",
-            arguments: [:], in: nil, contentWorld: .page
-        )
-        guard let text = result as? String,
-              let data = text.data(using: .utf8),
-              let calls = try? JSONDecoder().decode([String].self, from: data)
-        else { return [] }
-        // No "/api/" filter: a tRPC or GraphQL endpoint would not match it, and
-        // missing the one call that matters is the whole failure mode here.
-        let interesting = calls.filter { url in
-            !url.hasSuffix(".js") && !url.hasSuffix(".css") && !url.hasSuffix(".woff2")
-                && !url.contains("/_next/static/") && !url.contains("data:")
-        }
-        return Array(Set(interesting)).sorted()
+        return []
     }
 
     // MARK: - Signing in
 
     /// Shows the WebView so the user can sign in — and, if a challenge appears,
     /// answer it themselves. The app never answers one on their behalf.
-    /// The one real logout in the app: this session belongs to Codenotch, so
-    /// Codenotch can end it.
+    /// The one real logout in the app: this session belongs to NotchAgent, so
+    /// NotchAgent can end it.
     ///
     /// Scoped to the site's own host (and any associated hosts) rather than
     /// emptying the store — the default store is shared, so clearing all of it
@@ -452,42 +351,8 @@ final class WebSessionProvider: NSObject, UsageProvider {
     }
 
     private func presentSignIn(switching: Bool) {
-        // Both flows must see an actual unauthenticated page before accepting
-        // an authenticated probe. Otherwise a stale but valid WebView session
-        // makes ordinary Sign in close immediately. The switching flow keeps
-        // the additional different-fingerprint requirement.
-        switchGate = WebSessionAuthenticationGate(
-            baselineFingerprint: lastAuthFingerprint,
-            requiresNewFingerprint: switching
-        )
-        // Watched from here on, not only at the end: a sign-in can finish on
-        // another origin — QianwenAI's SSO runs through account.qianwenai.com
-        // and account.aliyun.com before it comes back to /home/ — and a window
-        // closed while the SSO page was still showing used to leave the user
-        // signed in with the app still asking them to sign in.
-        startSignInProbePoll()
-        let webView = makeWebViewIfNeeded()
-        if let signInWindow {
-            signInWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1100, height: 800),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Sign in to \(displayName)"
-        window.contentView = webView
-        window.delegate = self
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        signInWindow = window
-        webView.load(URLRequest(url: site.origin))
-        signInSheetDidOpen()
+        // Embedded sign-in via unrestricted WKWebView is disabled for privacy in this private build.
+        Log.usage.notice("\(self.site.id, privacy: .public): embedded browser sign-in is disabled in this private build")
     }
 
     /// What opening the sheet means for the session.

@@ -6,7 +6,7 @@ import os
 ///
 /// Google refuses us: `retrieveUserQuotaSummary` on `cloudcode-pa` answers 403
 /// "You do not have a valid license of this product" for a personal account,
-/// because the API judges *which client* is asking and Codenotch cannot
+/// because the API judges *which client* is asking and NotchAgent cannot
 /// honestly claim to be Antigravity. Antigravity's window has the same problem
 /// and solves it the same way — it never calls Google for this either. It calls
 /// the language server running on this machine, which already holds the
@@ -152,7 +152,8 @@ enum AntigravityBridge {
         request.httpBody = Data(#"{"forceRefresh":true}"#.utf8)
         request.timeoutInterval = 10
 
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .antigravityLocal)
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .antigravityLocal))
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw UsageProviderError.badResponse(
                 status: (response as? HTTPURLResponse)?.statusCode ?? 0

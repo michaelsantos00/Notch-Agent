@@ -1,13 +1,13 @@
 import Foundation
 
-/// Which language Codenotch's own copy uses.
+/// Which language NotchAgent's own copy uses.
 ///
-/// Follow System is the default. A forced choice exists because the Mac's
+/// American English is the default. A forced choice exists because the Mac's
 /// language is not always the one the person wants this app in — bilingual
 /// machines, or a Mac in a language we do not ship.
 enum AppLanguage: String, CaseIterable, Identifiable {
-    case system = "system"
     case english = "en"
+    case system = "system"
     case french = "fr"
     case german = "de"
     case indonesian = "id"
@@ -55,7 +55,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .system:              return L10n.t("Follow System")
-        case .english:             return "English"
+        case .english:             return "English (US)"
         case .french:              return "Français"
         case .german:              return "Deutsch"
         case .indonesian:          return "Bahasa Indonesia"
@@ -78,7 +78,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case .english, .french, .german, .indonesian, .japanese, .korean,
              .brazilianPortuguese, .russian, .simplifiedChinese, .traditionalChinese,
              .ukrainian, .uzbek, .turkish:
-            return L10n.t("Codenotch uses this language even if the Mac does not.")
+            return L10n.t("NotchAgent uses this language even if the Mac does not.")
         }
     }
 }

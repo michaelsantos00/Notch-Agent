@@ -33,7 +33,7 @@ actor OpenCodeProvider: UsageProvider {
     private var retryNoEarlierThan: Date?
     private var consecutiveRateLimits = 0
 
-    init(session: URLSession = .shared, archive: UsageArchive = UsageArchive()) {
+    init(session: URLSession = NetworkPolicy.makeSession(for: .opencode), archive: UsageArchive = UsageArchive()) {
         self.session = session
         self.archive = archive
         self.retryNoEarlierThan = archive.loadBackoffUntil(providerID: id)
@@ -123,8 +123,9 @@ actor OpenCodeProvider: UsageProvider {
         }
         request.timeoutInterval = 15
 
-        Log.usage.debug("GET \(url.absoluteString, privacy: .public)")
-        let (data, response) = try await session.data(for: request)
+        try NetworkPolicy.validate(request: request, for: .opencode)
+        Log.usage.debug("opencode: GET usage")
+        let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .opencode))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         Log.usage.debug("go usage endpoint answered \(status)")
 
@@ -189,7 +190,8 @@ actor OpenCodeProvider: UsageProvider {
         request.timeoutInterval = 15
 
         do {
-            let (_, response) = try await session.data(for: request)
+            try NetworkPolicy.validate(request: request, for: .opencode)
+            let (_, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .opencode))
             return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
             // A probe that cannot be made is not a verdict. Claiming "signed

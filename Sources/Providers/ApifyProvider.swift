@@ -20,10 +20,10 @@ actor ApifyProvider: UsageProvider {
     private let now: @Sendable () -> Date
     private var retryNoEarlierThan: Date?
 
-    init(session: URLSession = .shared, archive: UsageArchive = UsageArchive(),
+    init(session: URLSession? = nil, archive: UsageArchive = UsageArchive(),
          sources: ApifyCredentialSources = ApifyCredentialSources(),
          now: @escaping @Sendable () -> Date = { Date() }) {
-        self.session = session
+        self.session = session ?? NetworkPolicy.makeSession(for: .apify)
         self.archive = archive
         self.sources = sources
         self.now = now
@@ -38,7 +38,7 @@ actor ApifyProvider: UsageProvider {
 
     nonisolated func account() -> ProviderAccount? { ApifyCredentials.account(sources) }
 
-    /// Only the token Codenotch holds itself. An `apify login` is the CLI's
+    /// Only the token NotchAgent holds itself. An `apify login` is the CLI's
     /// to end, the same bargain every borrowed credential makes.
     nonisolated func signOut() async { sources.deleteSettingsToken() }
 
@@ -59,10 +59,14 @@ actor ApifyProvider: UsageProvider {
         request.httpShouldHandleCookies = false
         request.timeoutInterval = 15
 
+        try NetworkPolicy.validate(request: request, for: .apify)
+
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .apify))
+        } catch let error as NetworkPolicy.PolicyError {
+            throw error
         } catch let error as URLError where error.code == .timedOut {
             throw UsageProviderError.timedOut
         } catch is CancellationError {

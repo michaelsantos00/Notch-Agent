@@ -31,6 +31,8 @@ final class NotchWindowController {
     var onRefreshProvider: ((String) async -> Void)?
     /// Open the settings window, asked for by clicking the handle.
     var onOpenSettings: (() -> Void)?
+    /// Reset the live and saved position through the fleet, like Settings does.
+    var onRecenter: (() -> Void)?
     /// An ⌥-drag on the pill settled at a new `model.alongOffset`. The
     /// controller only holds the live value; persisting it per edge is
     /// Preferences' job, the same division `apply(edge:)` already keeps.
@@ -2038,7 +2040,7 @@ final class NotchWindowController {
         model.now = now
     }
 
-    private func contextMenu() -> NSMenu {
+    func contextMenu() -> NSMenu {
         Log.usage.debug("context menu opened")
         let menu = NSMenu()
         // AppKit otherwise decides enablement itself and overrules the line
@@ -2053,6 +2055,14 @@ final class NotchWindowController {
         keepOpen.target = menuActions
         keepOpen.isEnabled = true
         menu.addItem(keepOpen)
+        let recenter = NSMenuItem(
+            title: L10n.t("Recenter notch"),
+            action: #selector(MenuActions.recenterNotch(_:)),
+            keyEquivalent: ""
+        )
+        recenter.target = menuActions
+        recenter.isEnabled = onRecenter != nil
+        menu.addItem(recenter)
         menu.addItem(.separator())
 
         let refresh = NSMenuItem(
@@ -2077,7 +2087,7 @@ final class NotchWindowController {
         }
         menu.addItem(.separator())
         menu.addItem(
-            withTitle: L10n.t("Quit Codenotch"),
+            withTitle: L10n.t("Quit NotchAgent"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         ).isEnabled = true
@@ -2087,7 +2097,8 @@ final class NotchWindowController {
     private lazy var menuActions = MenuActions(
         refresh: { [weak self] in self?.onRefresh?() },
         signIn: { [weak self] index in self?.signInItems[safe: index]?.action() },
-        togglePinned: { [weak self] in self?.togglePinned() }
+        togglePinned: { [weak self] in self?.togglePinned() },
+        recenter: { [weak self] in self?.onRecenter?() }
     )
 }
 
@@ -2098,19 +2109,23 @@ final class MenuActions: NSObject {
     private let refresh: () -> Void
     private let signIn: (Int) -> Void
     private let pin: () -> Void
+    private let recenter: () -> Void
 
     init(
         refresh: @escaping () -> Void,
         signIn: @escaping (Int) -> Void,
-        togglePinned: @escaping () -> Void
+        togglePinned: @escaping () -> Void,
+        recenter: @escaping () -> Void
     ) {
         self.refresh = refresh
         self.signIn = signIn
         self.pin = togglePinned
+        self.recenter = recenter
     }
 
     @objc func refreshNow(_ sender: Any?) { refresh() }
     @objc func togglePinned(_ sender: Any?) { pin() }
+    @objc func recenterNotch(_ sender: Any?) { recenter() }
 
     @objc func signIn(_ sender: Any?) {
         guard let item = sender as? NSMenuItem else { return }

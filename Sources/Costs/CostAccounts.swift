@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// One CLI login as the cost layer sees it: a Codenotch profile (Claude or
+/// One CLI login as the cost layer sees it: a NotchAgent profile (Claude or
 /// Codex, default or `~/.claude-<slug>`) plus how it is paid. Billing choices,
 /// the detected plan and the credit cap persist in accounts.json.
 struct CostAccount: Identifiable, Equatable {
@@ -11,7 +11,7 @@ struct CostAccount: Identifiable, Equatable {
         var title: String { self == .subscription ? L10n.t("Monthly plan") : L10n.t("API key (per token)") }
     }
 
-    let id: String                 // the provider id Codenotch uses ("claude", "claude-braspine", "codex", …)
+    let id: String                 // the provider id NotchAgent uses ("claude", "claude-braspine", "codex", …)
     let provider: String           // "claude" | "codex"
     let name: String               // "Claude (work)": the profile's own name
     let configDirectory: URL
@@ -62,15 +62,40 @@ final class CostAccountStore: ObservableObject {
         return base.appendingPathComponent("Codenotch/costs/accounts.json")
     }()
 
-    private init() {
-        if let data = try? Data(contentsOf: Self.fileURL),
-           let map = try? JSONDecoder().decode([String: Stored].self, from: data) { stored = map }
-        rediscover()
+    static var testAccountsOverride: [CostAccount]? {
+        didSet {
+            if Runtime.isUnderTest {
+                shared.rediscover()
+            }
+        }
     }
 
-    /// Profiles come from Codenotch's own discovery, so an account added there
+    private init() {
+        guard !Runtime.isUnderTest else { return }
+        do {
+            try PrivacyFileProtection.secureDirectory(at: Self.fileURL.deletingLastPathComponent())
+            try PrivacyFileProtection.secureFile(at: Self.fileURL)
+        } catch { return }
+        if let data = try? Data(contentsOf: Self.fileURL),
+           let map = try? JSONDecoder().decode([String: Stored].self, from: data) { stored = map }
+        if !Runtime.isUnderTest {
+            rediscover()
+        }
+    }
+
+    /// Profiles come from NotchAgent's own discovery, so an account added there
     /// (a new `~/.claude-<slug>`) shows up here without a second list.
     func rediscover() {
+        if Runtime.isUnderTest {
+            if let testList = Self.testAccountsOverride {
+                let mapped = testList.map(apply)
+                if accounts != mapped { accounts = mapped }
+            } else {
+                accounts = []
+                stored = [:]
+            }
+            return
+        }
         var list: [CostAccount] = []
         for p in ClaudeProfile.discover() {
             list.append(apply(CostAccount(id: p.id, provider: "claude", name: p.displayName, configDirectory: p.configDirectory)))
@@ -120,16 +145,27 @@ final class CostAccountStore: ObservableObject {
     }
 
     private func save() {
+        guard !Runtime.isUnderTest, !PersistentWrites.isSuspended else { return }
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? enc.encode(stored) {
-            try? FileManager.default.createDirectory(at: Self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: Self.fileURL, options: .atomic)
+            try? PrivacyFileProtection.writeAtomically(data: data, to: Self.fileURL)
         }
     }
 
     // MARK: Plan detection (once a day, from the login the CLI already holds)
 
+    private var planTasks: [String: Task<Void, Never>] = [:]
+
+    func stopPlanDetection() async {
+        let tasks = Array(planTasks.values)
+        planTasks.removeAll()
+        for task in tasks { task.cancel() }
+        for task in tasks { await task.value }
+    }
+
     func detectPlanIfDue(_ id: String) {
+        guard planTasks[id] == nil else { return }
+        guard CostModels.isHistoryEnabled(for: id) else { return }
         guard let a = account(id), !planIsFresh(id) else { return }
         if a.provider == "codex" {
             if let plan = CodexCredentials.account(from: a.configDirectory.appendingPathComponent("auth.json"))?.plan {
@@ -138,19 +174,29 @@ final class CostAccountStore: ObservableObject {
             return
         }
         guard let profile = ClaudeProfile.discover().first(where: { $0.id == id }) else { return }
-        Task.detached(priority: .utility) {
+        planTasks[id] = Task { [weak self] in
+            defer { self?.planTasks.removeValue(forKey: id) }
+            guard !Task.isCancelled, CostModels.isHistoryEnabled(for: id) else { return }
             guard let creds = try? ClaudeCredentials.read(services: profile.keychainServices, interactive: false) else { return }
+            let scope = NetworkPolicy.NetworkScope.costAccounts(provider: a.provider)
             var request = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/profile")!)
             request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
             request.timeoutInterval = 15
-            guard let (data, resp) = try? await URLSession.shared.data(for: request),
+            do {
+                try NetworkPolicy.validate(request: request, for: scope)
+            } catch {
+                return
+            }
+            let session = NetworkPolicy.makeSession(for: scope)
+            guard let (data, resp) = try? await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: scope)),
                   (resp as? HTTPURLResponse)?.statusCode == 200,
                   let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
             let org = root["organization"] as? [String: Any]
             guard let tier = (org?["rate_limit_tier"] as? String)
                 ?? ((org?["organization_type"] as? String).map { "default_" + $0 }) else { return }
-            await MainActor.run { CostAccountStore.shared.setPlan(id, tier: tier) }
+            guard !Task.isCancelled, CostModels.isHistoryEnabled(for: id) else { return }
+            self?.setPlan(id, tier: tier)
         }
     }
 }

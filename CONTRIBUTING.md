@@ -4,9 +4,9 @@
 
 ```sh
 brew install xcodegen create-dmg   # once — project.yml generates the .xcodeproj
-make build               # Debug build, ad-hoc signed
-make test                # unit tests
-make run                 # build and launch
+make build DEV_SIGN='CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Automatic'
+make test DEV_SIGN='CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Automatic'
+make run DEV_SIGN='CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Automatic'
 ```
 
 None of these need an Apple Developer account. `xcodebuild` ad-hoc signs a
@@ -24,14 +24,13 @@ So `ClaudeCredentials.read` never shows the dialogue from a background refresh:
 interaction is switched off for the read, and a refusal is retried through
 `/usr/bin/security`, which is Apple-signed and on the item's access list. The
 one read that may prompt is the one somebody clicks **Allow access…** for in
-Settings. To stop the refusal happening at all, `Scripts/fix-keychain-partitions.sh`
-adds Codenotch's Team ID to those items' partition lists — once, with your login
-password.
+Settings. For this private fork, use that explicit permission flow. Do not run
+inherited Keychain partition or local-signing scripts as part of setup: they can
+broaden access to credentials and are not needed for an ad-hoc local build.
 
-`make release` is different: it archives, signs with a Developer ID
-certificate, notarizes with Apple, and regenerates the Sparkle auto-update
-feed. That's the maintainer's job for cutting an official build, and it needs
-credentials only the maintainer has. You won't need it to contribute.
+`make release` archives, signs with a Developer ID certificate, and notarizes
+with Apple. It requires your own signing and notarization configuration. The
+private build has no automatic updater and generates no update feed.
 
 ## Before opening a PR
 
