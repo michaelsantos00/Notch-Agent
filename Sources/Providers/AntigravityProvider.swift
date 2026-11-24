@@ -1,19 +1,8 @@
 import Foundation
 import SQLite3
 import os
-/// Gemini, as Antigravity sees it.
-///
-/// **What this can and cannot report, and why.** Antigravity talks to Google's
-/// Cloud Code backend, and the only call that describes the account is
-/// `:loadCodeAssist`. It answers with tiers — which plan you are on and which
-/// you are not eligible for — and no numbers: no used, no limit, no reset. A
-/// packet capture of a signed-in install showed exactly two RPCs, and neither
-/// carries a quota.
-///
-/// So this provider reports the account honestly and says there is nothing
-/// metered, rather than inventing a ring. That is the same answer Cursor's free
-/// plan gets, and for the same reason: a confident 0% is worse than an admitted
-/// blank, especially in something people pay for.
+/// Antigravity quota from the selected CLI account, or from the existing
+/// desktop bridge and Cloud Code sources.
 actor AntigravityProvider: UsageProvider {
     nonisolated let profile: AntigravityProfile
     nonisolated let id: String
@@ -22,11 +11,7 @@ actor AntigravityProvider: UsageProvider {
     nonisolated let displayName: String
     nonisolated let glyph = ProviderGlyph.antigravity
 
-    /// The production host. Antigravity itself also calls a `daily-` variant,
-    /// which answers 403 to this token — so it is not a fallback, it is a
-    /// different audience.
-    private let endpoint = URL(string: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")!
-    /// The real usage figure — served by Cloud Code PA.
+    /// Google serves grouped OAuth quota summaries on the daily Cloud Code host.
     private let quotaEndpoint = URL(string: "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")!
     private let session: URLSession
     /// A second session, trusting loopback only, for the local language server.
@@ -44,6 +29,8 @@ actor AntigravityProvider: UsageProvider {
     private var everBridged = false
     /// Where the last official reading is kept, so it outlives a relaunch.
     private let defaults: UserDefaults
+    private let cliEnabled: @Sendable () -> Bool
+    private let cliQuota: @Sendable () async throws -> [LimitWindow]
 
     /// How the language server is asked, when a test needs to say. Production
     /// leaves this nil and goes through `localQuota()`, which spawns `ps` and
@@ -56,7 +43,9 @@ actor AntigravityProvider: UsageProvider {
          session: URLSession? = nil,
          localSession: URLSession? = nil,
          localQuota: (@Sendable () async -> [LimitWindow]?)? = nil,
-         defaults: UserDefaults? = nil) {
+         defaults: UserDefaults? = nil,
+         cliEnabled: @escaping @Sendable () -> Bool = { !Runtime.isUnderTest && Preferences.storedAntigravityUseCLI() },
+         cliQuota: @escaping @Sendable () async throws -> [LimitWindow] = { try await AntigravityCLI.quota() }) {
         // A test that names no store gets a throwaway one: the test host is the
         // app itself, and its readings must not land in the real preferences.
         self.defaults = defaults ?? (Runtime.isUnderTest
@@ -68,10 +57,17 @@ actor AntigravityProvider: UsageProvider {
         self.session = session ?? NetworkPolicy.makeSession(for: .antigravityRemote)
         self.localQuotaOverride = localQuota
         self.localSession = localSession ?? NetworkPolicy.makeSession(for: .antigravityLocal)
+        self.cliEnabled = cliEnabled
+        self.cliQuota = cliQuota
     }
 
+    private nonisolated var usesCLI: Bool { profile.slug == nil && cliEnabled() }
+
     nonisolated var signInRoute: SignInRoute {
-        profile.signInRoute
+        if usesCLI {
+            return .command("agy", name: "Antigravity CLI", install: URL(string: "https://antigravity.google/download"))
+        }
+        return profile.signInRoute
     }
 
     /// Reached only from "Allow access…", so it may let the next read prompt.
@@ -81,6 +77,10 @@ actor AntigravityProvider: UsageProvider {
     }
 
     nonisolated func account() -> ProviderAccount? {
+        if usesCLI {
+            // The report provides quota for the CLI account without its identity.
+            return ProviderAccount(label: nil, plan: nil, source: "Antigravity CLI", manageURL: nil)
+        }
         if AntigravityCredentials.isSignedIn(for: profile), let held = AntigravityCredentials.held(for: profile) {
             let email = held.email
             let plan = held.authMethod == "consumer" ? L10n.t("Personal") : held.authMethod
@@ -105,6 +105,11 @@ actor AntigravityProvider: UsageProvider {
     }
 
     func fetchSnapshot() async throws -> ProviderSnapshot {
+        if usesCLI {
+            let windows = try await cliQuota()
+            try Task.checkCancellation()
+            return snapshot(windows, fidelity: .official)
+        }
         // Antigravity's own language server first, before anything is asked of
         // the keychain. It already holds the credential and the client identity
         // Google insists on, and answers with the same figure Antigravity's own
@@ -116,9 +121,11 @@ actor AntigravityProvider: UsageProvider {
         // and an empty ring, while the server that would have answered sat
         // running on the same machine, never asked.
         if profile.slug == nil {
-            if let windows = await localQuota(), !windows.isEmpty {
+            let windows = await localQuota()
+            try Task.checkCancellation()
+            if let windows, !windows.isEmpty {
                 everBridged = true
-                UserDefaults.standard.set(true, forKey: "AntigravityEverBridged")
+                PersistentWrites.perform { defaults.set(true, forKey: "AntigravityEverBridged") }
                 return official(windows)
             }
 
@@ -133,32 +140,24 @@ actor AntigravityProvider: UsageProvider {
         if let credentials,
            let windows = try? await quota(token: credentials.accessToken, project: credentials.projectId),
            !windows.isEmpty {
+            try Task.checkCancellation()
             return official(windows)
         }
+        try Task.checkCancellation()
 
-        // 2. Fallback to OMP SQLite store if offline or direct call fails
+        // Prefer our own last measured reading to another tool's history.
+        if let carried = carriedForwardSnapshot() { return carried }
+
+        // OMP's SQLite rows are historical readings.
         if profile.slug == nil {
             let ompWindows = Self.ompUsageWindows(forEmail: credentials?.email)
             if !ompWindows.isEmpty {
-                return official(ompWindows)
+                return snapshot(ompWindows, fidelity: .derived)
             }
         }
 
-        // 3. The last official reading, carried forward. Quota is only spent
-        // while Antigravity or `agy` runs, and while either runs the bridge
-        // reads it — so with both closed the last reading is still true, save
-        // for the windows that have reset since. Only use on another machine
-        // escapes this, which is what the `~` owns up to.
-        if let carried = carriedForwardSnapshot() { return carried }
-
         if everBridged { throw UsageProviderError.credentialExpired }
-        // is the only number left — reported as a *count*, with no
-        // `usedFraction`, which is a case the model already knows: the cell
-        // prints the number and the ring draws its track with no arc, because
-        // there is no limit to be a fraction of.
-        //
-        // Better than the dash it showed before, which read as broken rather
-        // than as "Google will not answer for this account".
+        // Local request counts have no published limit.
         let roots = profile.slug == nil ? AntigravityActivity.transcriptRoots : [profile.brainDirectory]
         let activity = AntigravityActivity.read(roots: roots)
         return ProviderSnapshot(
@@ -184,8 +183,12 @@ actor AntigravityProvider: UsageProvider {
         if let data = try? JSONEncoder().encode(windows) {
             PersistentWrites.perform { defaults.set(data, forKey: rememberedKey) }
         }
-        return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
-                                fidelity: .official, status: .ok, windows: windows,
+        return snapshot(windows, fidelity: .official)
+    }
+
+    private func snapshot(_ windows: [LimitWindow], fidelity: Fidelity) -> ProviderSnapshot {
+        ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
+                                fidelity: fidelity, status: .ok, windows: windows,
                                 headlineID: resolveHeadlineID(for: windows),
                                 weeklyID: resolveWeeklyID(for: windows))
     }
@@ -198,11 +201,7 @@ actor AntigravityProvider: UsageProvider {
         guard let data = defaults.data(forKey: rememberedKey),
               let windows = try? JSONDecoder().decode([LimitWindow].self, from: data),
               !windows.isEmpty else { return nil }
-        let carried = Self.carriedForward(windows, now: Date())
-        return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
-                                fidelity: .derived, status: .ok, windows: carried,
-                                headlineID: resolveHeadlineID(for: carried),
-                                weeklyID: resolveWeeklyID(for: carried))
+        return snapshot(Self.carriedForward(windows, now: Date()), fidelity: .derived)
     }
 
     /// Every window whose reset has passed is empty again, its next reset the
@@ -300,7 +299,7 @@ actor AntigravityProvider: UsageProvider {
         // Antigravity restarts, so a stale one is expected, not exceptional.
         guard let fresh = AntigravityBridge.discover() else {
             self.bridge = nil
-            Log.usage.error("Antigravity localQuota discover failed to find process")
+            Log.usage.debug("Antigravity legacy loopback quota service is unavailable")
             return nil
         }
         self.bridge = fresh
@@ -312,9 +311,7 @@ actor AntigravityProvider: UsageProvider {
         }
     }
 
-    /// Ask for the account's quota, returning nil when it is not allowed to.
-    ///
-    /// A free or personal account answers 403 #3501, "You do not have a valid
+    /// Ask for the account's quota where its OAuth grant allows this call.
     private func quota(token: String, project: String? = nil) async throws -> [LimitWindow]? {
         var request = URLRequest(url: quotaEndpoint)
         request.httpMethod = "POST"
@@ -322,7 +319,7 @@ actor AntigravityProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("antigravity/hub/2.8.0 (aidev_client; os_type=darwin; arch=arm64; cl=963137146)", forHTTPHeaderField: "User-Agent")
         request.setValue("ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI", forHTTPHeaderField: "Client-Metadata")
-        let bodyObj: [String: Any] = (project != nil && !project!.isEmpty) ? ["project": project!] : [:]
+        let bodyObj: [String: Any] = project.flatMap { $0.isEmpty ? nil : ["project": $0] } ?? [:]
         request.httpBody = try? JSONSerialization.data(withJSONObject: bodyObj)
         request.timeoutInterval = 15
 
@@ -338,20 +335,15 @@ actor AntigravityProvider: UsageProvider {
 
     /// Turns a quota summary into standard limit windows.
     ///
-    /// Standard Antigravity exposes two groups with two windows each:
-    /// 1. "Gemini Models" -> 5-hour Limit & Weekly Limit
-    /// 2. "Claude and GPT models" -> 5-hour Limit & Weekly Limit
-    ///
-    /// Both the local language server (which already provides grouped buckets)
-    /// and direct Google Cloud Code PA `retrieveUserQuota` responses (which list
-    /// individual model buckets) are normalized into this standard 4-window structure.
+    /// Preserve measured quota groups, including weekly-only and model-specific limits.
     nonisolated static func windows(in data: Data, now: Date = Date()) -> [LimitWindow] {
         AntigravityQuotaParser.parse(data, now: now)
     }
 
 
-    static func ompUsageWindows(forEmail email: String? = nil) -> [LimitWindow] {
-        let dbURL = URL(fileURLWithPath: ("~/.omp/agent/agent.db" as NSString).expandingTildeInPath)
+    static func ompUsageWindows(forEmail email: String? = nil,
+                                at dbURL: URL = FileManager.default.homeDirectoryForCurrentUser
+                                    .appendingPathComponent(".omp/agent/agent.db")) -> [LimitWindow] {
         guard let db = SQLiteStore.open(dbURL) else { return [] }
         defer { sqlite3_close(db) }
 
@@ -397,10 +389,13 @@ actor AntigravityProvider: UsageProvider {
         var latestByID: [String: (group: String, label: String, used: Double, resets: Date?)] = [:]
 
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let limitId = String(cString: sqlite3_column_text(stmt, 0))
-            let rawLabel = String(cString: sqlite3_column_text(stmt, 1))
+            guard let id = sqlite3_column_text(stmt, 0), let label = sqlite3_column_text(stmt, 1),
+                  [SQLITE_FLOAT, SQLITE_INTEGER].contains(sqlite3_column_type(stmt, 3)) else { continue }
+            let limitId = String(cString: id)
+            let rawLabel = String(cString: label)
             let windowLabel = sqlite3_column_text(stmt, 2).map { String(cString: $0).lowercased() } ?? ""
             let usedFraction = sqlite3_column_double(stmt, 3)
+            guard (0...1).contains(usedFraction) else { continue }
             let resetsAtMs = sqlite3_column_type(stmt, 4) != SQLITE_NULL ? sqlite3_column_double(stmt, 4) : 0
             let resetsAt = (resetsAtMs > 0) ? Date(timeIntervalSince1970: resetsAtMs / 1000.0) : nil
 
@@ -415,36 +410,11 @@ actor AntigravityProvider: UsageProvider {
             }
         }
 
-        let standardSlots: [(id: String, group: String, label: String, isWeekly: Bool)] = [
-            ("gemini-hourly", L10n.t("Gemini Models"), L10n.t("5-hour Limit"), false),
-            ("gemini-weekly", L10n.t("Gemini Models"), L10n.t("Weekly Limit"), true),
-            ("3p-hourly", L10n.t("Claude and GPT models"), L10n.t("5-hour Limit"), false),
-            ("3p-weekly", L10n.t("Claude and GPT models"), L10n.t("Weekly Limit"), true)
-        ]
-
-        var windows: [LimitWindow] = []
-        for slot in standardSlots {
-            if let item = latestByID[slot.id] {
-                windows.append(LimitWindow(
-                    id: slot.id,
-                    group: item.group,
-                    label: item.label,
-                    usedFraction: item.used,
-                    resetsAt: item.resets,
-                    duration: slot.isWeekly ? 7 * 86400 : nil
-                ))
-            } else {
-                windows.append(LimitWindow(
-                    id: slot.id,
-                    group: slot.group,
-                    label: slot.label,
-                    usedFraction: 0.0,
-                    resetsAt: nil,
-                    duration: slot.isWeekly ? 7 * 86400 : nil
-                ))
-            }
+        return ["gemini-hourly", "gemini-weekly", "3p-hourly", "3p-weekly"].compactMap { id in
+            guard let item = latestByID[id] else { return nil }
+            return LimitWindow(id: id, group: item.group, label: item.label, usedFraction: item.used,
+                               resetsAt: item.resets, duration: id.hasSuffix("-weekly") ? 7 * 86400 : nil)
         }
-        return windows
     }
 
     /// Known quota group names, so an English API value still localizes.

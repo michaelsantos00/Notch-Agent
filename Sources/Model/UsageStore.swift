@@ -626,6 +626,17 @@ final class UsageStore: ObservableObject {
         restart(provider) { provider.endpoint = endpoint }
     }
 
+    func antigravitySourceChanged() {
+        let id = AntigravityProfile.defaultID
+        guard let provider = providers.first(where: { $0.id == id }) else { return }
+        restart(provider) {
+            lastGood.removeValue(forKey: id)
+            archive.forget(id)
+            refusedAccess.remove(id)
+            providerAccountRevision &+= 1
+        }
+    }
+
     /// A changed address makes whatever the old one was about to answer
     /// untrue; the reading is cleared and the new address asked at once.
     private func restart(_ provider: UsageProvider, applying change: () -> Void) {

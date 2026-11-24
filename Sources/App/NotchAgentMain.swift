@@ -1,6 +1,16 @@
 import SwiftUI
 
 @main
+enum NotchAgentEntry {
+    @MainActor static func main() {
+        if CommandLine.arguments.dropFirst().first == CursorActivityHooks.argument {
+            CursorActivityHooks.runHelper()
+        } else {
+            NotchAgentMain.main()
+        }
+    }
+}
+
 struct NotchAgentMain: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 

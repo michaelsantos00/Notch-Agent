@@ -12,8 +12,7 @@ import os
 /// written, so there is nothing to race the CLI for. That is safe because
 /// `auth.x.ai` issues a new refresh token on every renewal but does not revoke
 /// the old one — the CLI's copy in the file keeps working after ours is used.
-/// Credits (`?format=credits`) is the weekly Grok Build allowance, and the only
-/// number this endpoint actually states.
+/// The credits format reports the shared subscription allowance.
 actor GrokLocalProvider: UsageProvider {
     nonisolated let id = "grok"
     nonisolated let displayName = "Grok"
@@ -53,15 +52,16 @@ actor GrokLocalProvider: UsageProvider {
             throw UsageProviderError.needsAuth
         }
 
+        let reading = try GrokUsage.reading(creditsJSON: credits)
         return ProviderSnapshot(
             id: id,
             displayName: displayName,
             glyph: glyph,
             fidelity: .official,
             status: .ok,
-            windows: try GrokUsage.windows(creditsJSON: credits),
+            windows: [reading.window],
             headlineID: "credits",
-            weeklyID: "credits"
+            weeklyID: reading.isWeekly ? "credits" : nil
         )
     }
 

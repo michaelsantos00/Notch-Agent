@@ -4,10 +4,9 @@ import os
 /// Where Ollama's cloud usage is read from. The two report different things,
 /// because since October 2026 Ollama publishes them in different places:
 enum OllamaUsageSource: String, CaseIterable, Codable, Sendable {
-    /// `GET /api/usage` with an API key: request counts, no percentage.
+    /// `GET /api/balance` with an API key, with a request-count fallback.
     case apiKey
-    /// ollama.com/settings through a browser's sign-in: the session (5-hour)
-    /// and weekly percentages, with their exact resets.
+    /// ollama.com/settings through a browser's sign-in.
     case browser
 }
 
@@ -26,8 +25,7 @@ struct OllamaCloudSource: Equatable, Sendable {
     }
 }
 
-/// Reads Ollama cloud usage, either from `https://ollama.com/api/usage` with
-/// an API key the user provides in Settings or exports as `OLLAMA_API_KEY`, or
+/// Reads Ollama cloud usage with an API key the user provides in Settings or exports as `OLLAMA_API_KEY`, or
 /// from the ollama.com settings page with the sign-in of a browser on this Mac.
 ///
 /// The API key is the only credential any provider *owns*: it is stored in the
@@ -41,6 +39,7 @@ actor OllamaProvider: UsageProvider {
     /// Thirty days of day buckets: the widest range the API allows, and enough
     /// to derive today and the last week from the one request.
     private let endpoint = URL(string: "https://ollama.com/api/usage?range=30d")!
+    private let balanceEndpoint = URL(string: "https://ollama.com/api/balance")!
     private let session: URLSession
     private let home: URL
     private let source: @Sendable () -> OllamaCloudSource
@@ -80,43 +79,50 @@ actor OllamaProvider: UsageProvider {
     func fetchSnapshot() async throws -> ProviderSnapshot {
         let source = source()
         switch source.usage {
-        case .apiKey: return try await fetchCounts()
+        case .apiKey: return try await fetchKeyUsage()
         case .browser: return try await fetchPage(source)
         }
     }
 
-    // MARK: - API key: request counts
+    // MARK: - API key
 
-    private func fetchCounts() async throws -> ProviderSnapshot {
+    private func fetchKeyUsage() async throws -> ProviderSnapshot {
         guard let key = OllamaCredentials.load() else { throw UsageProviderError.needsAuth }
+        let (data, status) = try await read(balanceEndpoint, key: key)
+        switch status {
+        case 200:
+            do { return snapshot(try OllamaUsage.balance(from: data)) }
+            catch UsageProviderError.nothingMetered { break }
+        case 401, 403: throw UsageProviderError.needsAuth
+        case 404, 405: break
+        case 429: throw UsageProviderError.rateLimited(retryAfter: 60)
+        default: throw UsageProviderError.badResponse(status: status)
+        }
+        let (counts, countStatus) = try await read(endpoint, key: key)
+        if countStatus == 401 || countStatus == 403 { throw UsageProviderError.needsAuth }
+        if countStatus == 429 { throw UsageProviderError.rateLimited(retryAfter: 60) }
+        guard (200..<300).contains(countStatus) else { throw UsageProviderError.badResponse(status: countStatus) }
+        return snapshot(try OllamaUsage.parse(String(decoding: counts, as: UTF8.self)))
+    }
 
-        var request = URLRequest(url: endpoint)
+    private func read(_ url: URL, key: String) async throws -> (Data, Int) {
+        var request = URLRequest(url: url)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
         try NetworkPolicy.validate(request: request, for: .ollamaCloud)
         let (data, response) = try await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .ollamaCloud))
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        if status == 401 || status == 403 { throw UsageProviderError.needsAuth }
-        guard (200..<300).contains(status) else {
-            throw UsageProviderError.badResponse(status: status)
-        }
-
-        let body = String(data: data, encoding: .utf8) ?? ""
-
-        let result = try OllamaUsage.parse(body)
-        return snapshot(result)
+        return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
     }
 
     // MARK: - Browser: the settings page
 
     private func fetchPage(_ source: OllamaCloudSource) async throws -> ProviderSnapshot {
-        let cookie = try browserCookie(for: source)
+        let cookieHeader = try browserCookie(for: source)
 
         var request = URLRequest(url: OllamaWebUsage.page)
-        request.setValue("\(OllamaWebUsage.sessionCookie)=\(cookie)", forHTTPHeaderField: "Cookie")
+        request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
         request.setValue("text/html", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
@@ -144,8 +150,7 @@ actor OllamaProvider: UsageProvider {
     private func browserCookie(for source: OllamaCloudSource) throws -> String {
         if let held = browserState.cookie(for: source.cookieStore) { return held }
 
-        let sessions = BrowserCookies.sessions(named: OllamaWebUsage.sessionCookie,
-                                               host: OllamaWebUsage.host, home: home)
+        let sessions = OllamaWebUsage.sessions(home: home)
         let chosen = source.cookieStore == OllamaCloudSource.automatic
             ? BrowserCookies.freshest(sessions)
             : sessions.first { $0.store.id == source.cookieStore }
@@ -158,7 +163,7 @@ actor OllamaProvider: UsageProvider {
         }
 
         do {
-            let value = try BrowserCookies.value(named: OllamaWebUsage.sessionCookie, host: OllamaWebUsage.host,
+            let value = try BrowserCookies.value(named: chosen.name, host: OllamaWebUsage.host,
                                                  in: chosen.store) { engine in
                 // A declined keychain dialogue is remembered, not re-raised on
                 // every poll; "Allow access…" clears it for a deliberate retry.
@@ -168,8 +173,9 @@ actor OllamaProvider: UsageProvider {
                     throw error
                 }
             }
-            browserState.hold(value, for: source.cookieStore)
-            return value
+            let header = "\(chosen.name)=\(value)"
+            browserState.hold(header, for: source.cookieStore)
+            return header
         } catch BrowserCookies.ReadError.keyUnavailable {
             throw UsageProviderError.accessDenied
         } catch BrowserCookies.ReadError.needsFullDiskAccess {

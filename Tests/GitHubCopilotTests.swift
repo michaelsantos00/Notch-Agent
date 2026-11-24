@@ -36,8 +36,7 @@ final class GitHubCopilotUsageTests: XCTestCase {
     func testLoadsEnvironmentTokenBeforeHosts() throws {
         let credentials = try GitHubCopilotCredentials.load(
             environment: ["GH_TOKEN": "env-token"],
-            hosts: "github.com:\n    user: octocat\n    oauth_token: old-token\n",
-            command: { XCTFail("should not invoke gh"); return nil }
+            hosts: "github.com:\n    user: octocat\n    oauth_token: old-token\n"
         )
         XCTAssertEqual(credentials.token, "env-token")
         XCTAssertEqual(credentials.username, "octocat")
@@ -46,27 +45,34 @@ final class GitHubCopilotUsageTests: XCTestCase {
     func testParsesGitHubCLIHosts() throws {
         let credentials = try GitHubCopilotCredentials.load(
             environment: [:],
-            hosts: "github.com:\n    user: octocat\n    oauth_token: cli-token\n",
-            command: { XCTFail("should not invoke gh"); return nil }
+            hosts: "github.com:\n    user: octocat\n    oauth_token: cli-token\n"
         )
         XCTAssertEqual(credentials.token, "cli-token")
         XCTAssertEqual(credentials.source, "GitHub CLI")
     }
 
-    func testFallsBackToGHAuthTokenCommand() throws {
-        let credentials = try GitHubCopilotCredentials.load(
-            environment: [:],
-            hosts: nil,
-            command: { "cli-auth-token" }
-        )
-        XCTAssertEqual(credentials.token, "cli-auth-token")
-        XCTAssertEqual(credentials.source, "GitHub CLI")
+    func testMissingConfiguredTokenRequiresSignIn() {
+        XCTAssertThrowsError(try GitHubCopilotCredentials.load(environment: [:], hosts: "github.com:\n  user: octocat\n")) {
+            guard case UsageProviderError.needsAuth = $0 else { return XCTFail("Expected sign-in guidance") }
+        }
     }
 
-    func testGHAuthTokenArgumentsIncludeHostname() {
-        XCTAssertEqual(
-            GitHubCopilotCredentials.ghAuthTokenArguments,
-            ["auth", "token", "--hostname", "github.com"]
-        )
+    func testReadsAICreditsAndUsesTheirReportedReset() throws {
+        let data = Data(#"""
+        {"quota_reset_date_utc":"2026-12-01T00:00:00Z","quota_snapshots":{
+          "premium_interactions":{"token_based_billing":true,"entitlement":100,"credits_used":12.5},
+          "chat":{"has_quota":false,"entitlement":50,"used":0}}}
+        """#.utf8)
+        let windows = try GitHubCopilotUsage.windows(from: data)
+        XCTAssertEqual(windows.map(\.label), ["AI credits"])
+        XCTAssertEqual(windows.first?.usedFraction, 0.125)
+        XCTAssertEqual(windows.first?.duration, 30 * 86400)
+    }
+
+    func testCreditPercentageCanBeReportedWithoutAnAbsoluteCap() throws {
+        let data = Data(#"{"token_based_billing":true,"quota_snapshots":{"premium_interactions":{"percent_remaining":75}}}"#.utf8)
+        let window = try XCTUnwrap(GitHubCopilotUsage.windows(from: data).first)
+        XCTAssertEqual(window.label, "AI credits")
+        XCTAssertEqual(window.usedFraction, 0.25)
     }
 }

@@ -14,17 +14,25 @@ import SQLite3
 ///   checkpointed, a read-only open fails outright with "unable to open
 ///   database file".
 ///
-/// So: `mode=ro` first, `immutable=1` second. The fallback is only ever reached
-/// when there is no write-ahead log left to miss, which is exactly when ignoring
-/// it costs nothing.
+/// SQLite can defer loading the schema until the first statement. Verify the
+/// connection before returning it, and only ignore an absent or empty WAL.
 enum SQLiteStore {
     static func open(_ url: URL) -> OpaquePointer? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let files = FileManager.default
+        guard url.isFileURL, files.fileExists(atPath: url.path) else { return nil }
         for query in ["mode=ro", "immutable=1"] {
+            if query == "immutable=1" {
+                let wal = url.path + "-wal"
+                if files.fileExists(atPath: wal) {
+                    guard let attributes = try? files.attributesOfItem(atPath: wal),
+                          (attributes[.size] as? NSNumber)?.uint64Value == 0 else { return nil }
+                }
+            }
             var db: OpaquePointer?
-            if sqlite3_open_v2("file:\(url.path)?\(query)", &db,
+            if sqlite3_open_v2("\(url.absoluteString)?\(query)", &db,
                                SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil) == SQLITE_OK,
-               let db {
+               let db,
+               sqlite3_exec(db, "SELECT name FROM sqlite_master LIMIT 1", nil, nil, nil) == SQLITE_OK {
                 return db
             }
             sqlite3_close(db)

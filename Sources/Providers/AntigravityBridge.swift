@@ -1,20 +1,9 @@
 import Foundation
 import os
 
-/// Asks Antigravity's own language server for the quota, instead of asking
-/// Google directly.
-///
-/// Google refuses us: `retrieveUserQuotaSummary` on `cloudcode-pa` answers 403
-/// "You do not have a valid license of this product" for a personal account,
-/// because the API judges *which client* is asking and NotchAgent cannot
-/// honestly claim to be Antigravity. Antigravity's window has the same problem
-/// and solves it the same way — it never calls Google for this either. It calls
-/// the language server running on this machine, which already holds the
-/// credential and the client identity, and lets that make the call.
-///
-/// So this is not a workaround for a locked door; it is the door Antigravity
-/// itself uses. It works only while Antigravity is running, which is honest:
-/// the figure comes from Antigravity, so Antigravity has to be there.
+/// Reads quota from versions that expose a local language-server connection.
+/// Desktop 2.34 and later use private authentication. The documented CLI
+/// report is available as a selectable source for those installs.
 enum AntigravityBridge {
     /// Where the language server is listening, and the token it demands.
     struct Endpoint: Equatable {
@@ -57,10 +46,7 @@ enum AntigravityBridge {
             return endpoint
         }
 
-        // Then the CLI, which serves the same RPC and is a whole install of its
-        // own — somebody who uses `agy` and never installs the IDE has a real
-        // quota to read and was getting the counted-requests fallback instead.
-        // It asks for no token: on loopback it answers anyone.
+        // Older CLI releases served the same RPC without a token.
         if let line = lines.first(where: isCLI),
            let endpoint = endpoint(for: line, token: nil, ports: listeningPorts) {
             return endpoint

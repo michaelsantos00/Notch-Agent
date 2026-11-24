@@ -200,6 +200,10 @@ final class Preferences: ObservableObject {
         didSet { defaults.set(antigravityHeadlineModel.rawValue, forKey: Keys.antigravityHeadlineModel) }
     }
 
+    @Published var antigravityUseCLI: Bool {
+        didSet { defaults.set(antigravityUseCLI, forKey: Keys.antigravityUseCLI) }
+    }
+
     /// Where along that edge the notch sits, nudged from the centred default
     /// by ⌥-dragging the pill. One value per edge — moving it on the right
     /// should not silently relocate it on the top too — so this is read and
@@ -601,6 +605,7 @@ final class Preferences: ObservableObject {
         static let ollamaCookieStore = "ollamaCookieStore"
         static let antigravityHeadlineLimit = "antigravityHeadlineLimit"
         static let antigravityHeadlineModel = "antigravityHeadlineModel"
+        static let antigravityUseCLI = "antigravityUseCLI"
         static let deepSeekPricingEnabled = "deepSeekPricingEnabled"
         static let deepSeekPricingSchedule = "deepSeekPricingSchedule"
         static let showCodexExtraLimits = "showCodexExtraLimits"
@@ -639,6 +644,10 @@ final class Preferences: ObservableObject {
               let model = AntigravityHeadlineModel(rawValue: value)
         else { return .gemini }
         return model
+    }
+
+    nonisolated static func storedAntigravityUseCLI(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Keys.antigravityUseCLI)
     }
 
     /// Whether extra Codex windows (Spark, code review) are shown, read off
@@ -923,6 +932,7 @@ final class Preferences: ObservableObject {
             .flatMap(AntigravityHeadlineLimit.init(rawValue:)) ?? .automatic
         self.antigravityHeadlineModel = defaults.string(forKey: Keys.antigravityHeadlineModel)
             .flatMap(AntigravityHeadlineModel.init(rawValue:)) ?? .gemini
+        self.antigravityUseCLI = Self.storedAntigravityUseCLI(defaults: defaults)
         // Follow the Mac unless the user explicitly chooses a NotchAgent colour.
         // Off by default: an extra arc in a 44pt circle is a change to how
         // every reading looks, and nobody asked for it on their behalf.
@@ -1125,6 +1135,10 @@ final class Preferences: ObservableObject {
             return !hidden.contains(providerID)
         }
         return Self.isDefaultOnFamily(providerID)
+    }
+
+    nonisolated static func storedCursorConnection(defaults: UserDefaults = .standard) -> Bool {
+        defaults.stringArray(forKey: Keys.connected)?.contains("cursor") == true
     }
 
     func setConnected(_ connected: Bool, for providerID: String) {

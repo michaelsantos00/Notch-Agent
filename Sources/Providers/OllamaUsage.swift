@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 /// Parses Ollama's `GET /api/usage` response.
@@ -35,6 +36,64 @@ enum OllamaUsage {
     struct Result {
         let windows: [LimitWindow]
         let headlineID: String?
+    }
+
+    static func balance(from data: Data) throws -> Result {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw UsageProviderError.badResponse(status: 200)
+        }
+        let included = root["included"] as? [String: Any] ?? [:]
+        var windows: [LimitWindow] = []
+        for (id, label, duration) in [("session", L10n.t("Session usage"), 5 * 3600.0),
+                                      ("weekly", L10n.t("Weekly usage"), 7 * 86400.0)] {
+            guard let period = included[id] as? [String: Any],
+                  let remaining = amount(period["remaining_percent"]), remaining <= 100 else { continue }
+            windows.append(LimitWindow(id: id, label: label, usedFraction: 1 - remaining / 100,
+                                       resetsAt: date(period["resets_at"]), duration: duration))
+        }
+        if windows.isEmpty,
+           let allowance = amount(included["allowance_usd"]), allowance > 0,
+           let balance = amount(included["balance_usd"]), balance <= allowance {
+            let period = included["period"] as? [String: Any] ?? [:]
+            windows.append(monthly(used: allowance - balance, allowance: allowance,
+                                   start: date(period["from"]), end: date(period["until"])))
+        }
+        if let wallet = root["purchased"] as? [String: Any], let balance = amount(wallet["balance_usd"]) {
+            windows.append(creditBalance(balance))
+        }
+        guard let first = windows.first else { throw UsageProviderError.nothingMetered(L10n.t("No Ollama credit balance reported.")) }
+        return Result(windows: windows, headlineID: windows.contains(where: { $0.id == "weekly" }) ? "weekly" : first.id)
+    }
+
+    static func monthly(used: Double, allowance: Double, start: Date? = nil, end: Date?) -> LimitWindow {
+        let duration = end.flatMap { end in start.flatMap { $0 < end ? end.timeIntervalSince($0) : nil } }
+        let money = used <= allowance
+            ? UsageMoneyBreakdown(currency: "USD", spent: used, remaining: allowance - used) : nil
+        return LimitWindow(id: "monthly", label: L10n.t("Monthly usage"), usedFraction: used / allowance, money: money,
+                           resetsAt: end, duration: duration)
+    }
+
+    static func creditBalance(_ value: Double) -> LimitWindow {
+        LimitWindow(id: "credit-balance", label: L10n.t("Credit balance"), usedText: usd(value))
+    }
+
+    static func usd(_ value: Double) -> String { value.formatted(.currency(code: "USD")) }
+
+    static func amount(_ raw: Any?) -> Double? {
+        let value: Double?
+        if let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            value = number.doubleValue
+        } else if let text = raw as? String {
+            value = Double(text.replacingOccurrences(of: ",", with: ""))
+        } else {
+            value = nil
+        }
+        guard let value, value.isFinite, value >= 0 else { return nil }
+        return value
+    }
+
+    private static func date(_ raw: Any?) -> Date? {
+        (raw as? String).flatMap(AntigravityCredentials.parse)
     }
 
     static func parse(_ json: String) throws -> Result {

@@ -88,6 +88,15 @@ struct CodexTokenUsage: Codable, Equatable, Sendable {
 /// (`additional_rate_limits`) and code review belong on the hover card, not
 /// the rings.
 enum CodexUsage {
+    static func weeklyID(in windows: [LimitWindow]) -> String? {
+        let week: TimeInterval = 7 * 86400
+        let secondary = windows.first { $0.id == "secondary" }
+        if secondary?.duration == week { return "secondary" }
+        if windows.contains(where: { $0.id == "primary" && $0.duration == week }) { return "primary" }
+        // Older snapshots only named the secondary window.
+        return secondary?.duration == nil ? secondary?.id : nil
+    }
+
     private struct Response: Decodable {
         let rate_limit: RateLimit?
         let plan_type: String?

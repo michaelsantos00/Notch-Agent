@@ -38,6 +38,29 @@ import Foundation
 /// `used`/`limit` on `overall` is the reading.
 enum CursorUsage {
     static var modelsLabel: String { L10n.t("Auto usage") }
+    static let weeklyID = "weekly"
+
+    private struct SharedUsage: Decodable {
+        let isUnified: Bool?
+        let includedLimitZero: Bool?
+        let hasNonZeroIncludedLimit: Bool?
+        let usagePercent: Double?
+        let nextResetTimestampUtc: String?
+        let cursorPlanName: String?
+    }
+
+    static func sharedWeeklyUsage(in data: Data, now: Date = Date()) -> (window: LimitWindow?, plan: String?)? {
+        guard let usage = try? JSONDecoder().decode(SharedUsage.self, from: data),
+              usage.isUnified == true else { return nil }
+        let plan = usage.cursorPlanName?.nonEmptyPlan
+        guard (usage.includedLimitZero.map { !$0 } ?? usage.hasNonZeroIncludedLimit) != false,
+              let percent = usage.usagePercent, percent.isFinite, percent >= 0,
+              let reset = date(usage.nextResetTimestampUtc), reset > now
+        else { return (nil, plan) }
+        let window = LimitWindow(id: weeklyID, label: L10n.t("Weekly limit"),
+                                 usedFraction: percent / 100, resetsAt: reset, duration: 7 * 86400)
+        return (window, plan)
+    }
 
     /// The window the ring should mean. Cursor Models when that field exists,
     /// never the blended total, never API — and on an enterprise/team plan,
@@ -52,7 +75,7 @@ enum CursorUsage {
     static func headlineID(in windows: [LimitWindow]) -> String {
         if windows.contains(where: { $0.id == "auto" }) { return "auto" }
         if windows.contains(where: { $0.id == "included" }) { return "included" }
-        return "api"
+        return windows.first?.id ?? "api"
     }
 
     static func windows(fromJSON json: String) throws -> [LimitWindow] {
@@ -81,12 +104,6 @@ enum CursorUsage {
                                        usedFraction: api, resetsAt: resetsAt,
                                        duration: duration))
         }
-        if let onDemand = spendWindow(usage["onDemand"], id: "on_demand",
-                                      label: L10n.t("On demand"), resetsAt: resetsAt,
-                                      duration: duration) {
-            windows.append(onDemand)
-        }
-
         // Enterprise / team plans omit `plan` entirely and meter a hard
         // `overall` ceiling instead. Keep the window id as `included` so the
         // provider's headlineID still resolves.
@@ -95,6 +112,11 @@ enum CursorUsage {
                                      label: L10n.t("Included usage"), resetsAt: resetsAt,
                                      duration: duration) {
             windows.append(overall)
+        }
+        if let onDemand = spendWindow(usage["onDemand"], id: "on_demand",
+                                      label: L10n.t("On demand"), resetsAt: resetsAt,
+                                      duration: duration) {
+            windows.append(onDemand)
         }
         if let teamOnDemand = spendWindow(team["onDemand"], id: "team_on_demand",
                                           label: L10n.t("Team on demand"), resetsAt: resetsAt,

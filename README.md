@@ -36,7 +36,7 @@ Open Settings with **⌘,**. General contains startup, app presence, language, a
 
 - Built-in provider requests use exact approved origins, isolated sessions, and redirect rejection.
 - Custom endpoints require an explicit origin; usage requests must stay on that origin.
-- Upstream auto-updates, automatic remote pricing, embedded browser logins, and background CLI helpers are disabled.
+- Upstream auto-updates, automatic remote pricing, and embedded browser logins are disabled. Antigravity CLI usage and Cursor CLI activity hooks are opt-in.
 - Transcript indexing is opt-in per account, with retention, Clear Local History, and coordinated Erase All Data controls.
 - Data remains on this Mac except for the authentication and usage requests sent to connected providers.
 

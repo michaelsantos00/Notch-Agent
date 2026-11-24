@@ -1,11 +1,9 @@
 import Foundation
 
-/// Reads the "Cloud usage" section of `https://ollama.com/settings`.
+/// Reads included usage and credits from `https://ollama.com/settings`.
 ///
-/// Since October 2026 the API reports request counts only; the session
-/// (5-hour) and weekly percentages appear nowhere but this page, for a signed-in
-/// browser. Each meter carries its figure in an accessibility label, followed by
-/// the exact reset time:
+/// Legacy session and weekly meters carry their figures in accessibility
+/// labels, followed by the exact reset time:
 ///
 /// ```html
 /// <div data-usage-track aria-label="Session usage 1.3% used">
@@ -18,6 +16,7 @@ import Foundation
 /// they are the parts least likely to move when the styling does.
 enum OllamaWebUsage {
     static let sessionCookie = "__Secure-session"
+    static let sessionCookieNames = ["wos-session", sessionCookie]
     static let host = "ollama.com"
     static let page = URL(string: "https://ollama.com/settings")!
 
@@ -44,13 +43,74 @@ enum OllamaWebUsage {
             }
         }
 
-        guard !windows.isEmpty else {
+        if windows.isEmpty, let monthly = monthly(in: html) { windows.append(monthly) }
+        windows.append(contentsOf: wallet(in: html))
+        guard let first = windows.first else {
             // No meters and nothing to sign out of is a signed-out page; no
             // meters on a signed-in one means the page changed under us.
             if html.contains("/signout") { throw UsageProviderError.badResponse(status: 200) }
             throw UsageProviderError.needsAuth
         }
-        return OllamaUsage.Result(windows: windows, headlineID: "session")
+        return OllamaUsage.Result(windows: windows, headlineID: first.id)
+    }
+
+    static func sessions(home: URL) -> [BrowserCookies.Session] {
+        let now = Date()
+        var seen: Set<String> = []
+        return sessionCookieNames.flatMap { BrowserCookies.sessions(named: $0, host: host, home: home) }
+            .filter { ($0.expires ?? .distantFuture) > now && seen.insert($0.store.id).inserted }
+    }
+
+    private static func monthly(in html: String) -> LimitWindow? {
+        let options: String.CompareOptions = [.regularExpression, .caseInsensitive]
+        let meter = html.range(of: #">\s*(Monthly usage|Free usage)\s*<"#, options: options)
+        guard let heading = meter ?? html.range(of: #">\s*Included usage\s*<"#, options: options) else { return nil }
+        let tail = String(html[heading.upperBound...].prefix(4_000))
+        let boundary = tail.range(of: #"</section\s*>|<h[1-6]\b|>\s*(Session|Hourly|Weekly) usage\s*<"#,
+                                  options: options)
+        let block = String(tail[..<(boundary?.lowerBound ?? tail.endIndex)])
+        let periodEnd = captures(#"data-time="([^"]+)""#, in: block).first.flatMap(AntigravityCredentials.parse)
+        let text = block.replacingOccurrences(of: #"<[^>]*>"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+        let amounts = captures(#"\$([\d,.]+)\s+of\s+\$([\d,.]+)\s+used\b"#, in: text)
+        if amounts.count == 2, let used = OllamaUsage.amount(amounts[0]),
+           let allowance = OllamaUsage.amount(amounts[1]), allowance > 0 {
+            return OllamaUsage.monthly(used: used, allowance: allowance, end: periodEnd)
+        }
+        let textPercent = captures(#"([0-9.]+)\s*%\s*used\b"#, in: text).first
+        let meterWidth = meter.flatMap { _ in captures(#"\bwidth:\s*([0-9.]+)%"#, in: block).first }
+        if let percent = OllamaUsage.amount(textPercent ?? meterWidth), percent <= 100 {
+            return LimitWindow(id: "monthly", label: L10n.t("Monthly usage"), usedFraction: percent / 100,
+                               resetsAt: periodEnd)
+        }
+        return nil
+    }
+
+    private static func wallet(in html: String) -> [LimitWindow] {
+        let page = html.replacingOccurrences(of: #"(?is)<(script|style)\b[^>]*>.*?</\1\s*>"#,
+                                             with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+        let heading = #"<h[1-6][^>]*>\s*Usage credits(?:\s*<span[^>]*>[^<]*</span\s*>)?\s*</h[1-6]\s*>"#
+        guard let block = captures(heading + #"(.*?)(?=</section\s*>|<h[1-6]\b|$)"#, in: page).first else { return [] }
+        var rows: [LimitWindow] = []
+        if let balance = captures(#"^\s*(?:<div[^>]*>\s*)*<span[^>]*>\s*\$([\d,.]+)\s*</span\s*>"#, in: block)
+            .first.flatMap({ OllamaUsage.amount($0) }) {
+            rows.append(OllamaUsage.creditBalance(balance))
+        }
+        if let used = captures(#">\s*Monthly credits used\s*</span\s*>\s*<span[^>]*>\s*\$([\d,.]+)\s*</span\s*>"#, in: block)
+            .first.flatMap({ OllamaUsage.amount($0) }) {
+            rows.append(LimitWindow(id: "monthly-spend", label: L10n.t("Monthly credits used"), usedText: OllamaUsage.usd(used)))
+        }
+        if !rows.isEmpty, let refill = captures(#"<p[^>]*>\s*(Refills\s+to\s+\$[\d,.]+\s+in\s+[^<]{1,160}?)\s*</p\s*>"#, in: block).first {
+            rows.append(LimitWindow(id: "next-refill", label: L10n.t("Next refill"), usedText: refill))
+        }
+        return rows
+    }
+
+    private static func captures(_ pattern: String, in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return [] }
+        return (1..<match.numberOfRanges).compactMap { Range(match.range(at: $0), in: text).map { String(text[$0]) } }
     }
 
     private struct Meter {

@@ -18,7 +18,7 @@ actor GitHubCopilotProvider: UsageProvider {
     }
 
     nonisolated var signInRoute: SignInRoute {
-        .command("gh auth login", name: "GitHub", install: URL(string: "https://cli.github.com"))
+        .guidance(L10n.t("Set GH_TOKEN or GITHUB_TOKEN in NotchAgent’s launch environment, or use a GitHub CLI configuration with a saved token."))
     }
 
     nonisolated func account() -> ProviderAccount? {
@@ -74,24 +74,16 @@ struct GitHubCopilotCredentials: Sendable {
     static func load() throws -> GitHubCopilotCredentials {
         let environment = ProcessInfo.processInfo.environment
         let hosts = try? String(contentsOf: hostsURL, encoding: .utf8)
-        return try load(environment: environment, hosts: hosts, command: ghToken)
+        return try load(environment: environment, hosts: hosts)
     }
 
-    /// Injectable inputs keep credential discovery testable without touching a
-    /// real token or starting GitHub CLI.
-    static func load(environment: [String: String],
-                     hosts: String?,
-                     command: () -> String?) throws -> GitHubCopilotCredentials {
+    static func load(environment: [String: String], hosts: String?) throws -> GitHubCopilotCredentials {
         let parsed = parseHosts(hosts)
-        if let token = nonEmpty(environment["GH_TOKEN"] ?? environment["GITHUB_TOKEN"]) {
+        if let token = nonEmpty(environment["GH_TOKEN"]) ?? nonEmpty(environment["GITHUB_TOKEN"]) {
             return GitHubCopilotCredentials(token: token, username: parsed.username,
                                             source: "GitHub")
         }
         if let token = parsed.token {
-            return GitHubCopilotCredentials(token: token, username: parsed.username,
-                                            source: "GitHub CLI")
-        }
-        if let token = nonEmpty(command()) {
             return GitHubCopilotCredentials(token: token, username: parsed.username,
                                             source: "GitHub CLI")
         }
@@ -108,46 +100,6 @@ struct GitHubCopilotCredentials: Sendable {
             source: "GitHub",
             manageURL: URL(string: "https://github.com/settings/copilot")
         )
-    }
-
-    static let ghAuthTokenArguments = ["auth", "token", "--hostname", "github.com"]
-
-    private static func ghToken() -> String? {
-        let candidates = [
-            "/opt/homebrew/bin/gh",
-            "/usr/local/bin/gh",
-            "/usr/bin/gh",
-            ("/opt/local/bin/gh" as NSString).expandingTildeInPath,
-            ("~/.nix-profile/bin/gh" as NSString).expandingTildeInPath,
-            ("~/.local/bin/gh" as NSString).expandingTildeInPath
-        ]
-        guard let binary = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            return nil
-        }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = ghAuthTokenArguments
-        process.standardInput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        do {
-            try process.run()
-            let watchdog = DispatchWorkItem {
-                if process.isRunning { process.terminate() }
-            }
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5, execute: watchdog)
-            defer { watchdog.cancel() }
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            guard let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else { return nil }
-            return text
-        } catch {
-            return nil
-        }
     }
 
     private static func parseHosts(_ text: String?) -> (username: String?, token: String?) {
@@ -210,28 +162,40 @@ enum GitHubCopilotUsage {
     }
 
     private static func window(id: String, quota: [String: Any], root: [String: Any]) -> LimitWindow? {
-        if (quota["unlimited"] as? Bool) == true { return nil }
+        if (quota["unlimited"] as? Bool) == true || (quota["has_quota"] as? Bool) == false { return nil }
 
+        let isCreditPool = id == "premium_interactions"
+            && ((quota["token_based_billing"] as? Bool) ?? (root["token_based_billing"] as? Bool) ?? false)
+        let label = isCreditPool ? L10n.t("AI credits") : label(for: id)
         let entitlement = number(quota["entitlement"])
-        let remaining = number(quota["remaining"])
-        let used = number(quota["used"])
+        let remaining = number(quota["remaining"]) ?? number(quota["quota_remaining"])
+        let used = (isCreditPool ? number(quota["credits_used"]) : nil) ?? number(quota["used"])
         let reset = date(quota["reset_date"] ?? quota["reset_at"] ?? quota["resets_at"])
+            ?? date(root["quota_reset_date_utc"])
             ?? date(root["quota_reset_date"])
 
         if entitlement == 0 { return nil }
         if let entitlement, entitlement > 0 {
-            let consumed = used ?? max(0, entitlement - (remaining ?? entitlement))
-            return LimitWindow(id: id, label: label(for: id),
-                               usedFraction: max(0, consumed / entitlement), resetsAt: reset,
-                               duration: monthlyDuration(endingAt: reset))
+            let consumed = used ?? remaining.map { max(0, entitlement - $0) }
+            if let consumed {
+                return LimitWindow(id: id, label: label, usedFraction: max(0, consumed / entitlement),
+                                   resetsAt: reset, duration: monthlyDuration(endingAt: reset))
+            }
+        }
+        if let remainingPercent = number(quota["percent_remaining"]), (0...100).contains(remainingPercent) {
+            return LimitWindow(id: id, label: label, usedFraction: 1 - remainingPercent / 100,
+                               resetsAt: reset, duration: monthlyDuration(endingAt: reset))
+        }
+        if isCreditPool, let used, used >= 0 {
+            return LimitWindow(id: id, label: label, usedText: used.formatted(), resetsAt: reset)
         }
         if let remaining, remaining >= 0, used == nil {
             return remaining == 0 && entitlement == 0 ? nil
-                : LimitWindow(id: id, label: label(for: id),
+                : LimitWindow(id: id, label: label,
                               remaining: Int(remaining.rounded()), resetsAt: reset)
         }
         if let used, used >= 0 {
-            return LimitWindow(id: id, label: label(for: id),
+            return LimitWindow(id: id, label: label,
                                used: Int(used.rounded()), resetsAt: reset)
         }
         return nil

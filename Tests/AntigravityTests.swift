@@ -1,3 +1,4 @@
+import SQLite3
 import XCTest
 @testable import NotchAgent
 
@@ -410,6 +411,76 @@ final class AntigravityActivityTests: XCTestCase {
 /// recognise must yield nothing and send the provider to the honest fallback,
 /// never a confident ring built on a guess.
 final class AntigravityQuotaTests: XCTestCase {
+    func testCLIUsageReportKeepsMeasuredWindowsAndResetDates() throws {
+        let data = Data(#"""
+        {"status":"SUCCESS","num_turns":0,"usage":{"total_tokens":0},
+         "command":{"name":"usage","data":{"groups":[
+          {"name":"Gemini Models","buckets":[
+           {"id":"gemini-weekly","name":"Weekly Limit Remaining","window":"weekly","remaining_fraction":0.75,"reset_time":"2026-11-28T10:00:00Z"},
+           {"id":"gemini-5h","name":"Five Hour Limit Remaining","window":"5h","remaining_fraction":0}]},
+          {"name":"Gemini 4 Argon","buckets":[
+           {"id":"gemini-4-argon-weekly","name":"Gemini 4 Argon Weekly Limit","window":"weekly","remaining_fraction":1},
+           {"id":"disabled-weekly","window":"weekly","remaining_fraction":0.5,"disabled":true},
+           {"id":"unknown-weekly","window":"weekly","reset_time":"2026-11-28T10:00:00Z"}]}
+         ]}}}
+        """#.utf8)
+
+        let windows = AntigravityProvider.windows(in: data)
+        XCTAssertEqual(windows.map(\.id), ["gemini-5h", "gemini-weekly", "gemini-4-argon-weekly"])
+        XCTAssertEqual(windows.map(\.usedFraction), [1, 0.25, 0])
+        XCTAssertEqual(windows.map(\.duration), [5 * 3600, 7 * 86400, 7 * 86400])
+        let weekly = try XCTUnwrap(windows.first { $0.id == "gemini-weekly" })
+        XCTAssertEqual(weekly.group, "Gemini Models")
+        XCTAssertEqual(weekly.label, "Weekly Limit")
+        XCTAssertEqual(weekly.resetsAt, ISO8601DateFormatter().date(from: "2026-11-28T10:00:00Z"))
+    }
+
+    func testOMPFallbackReturnsOnlyMeasuredRows() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(url.path, &database), SQLITE_OK)
+        let sql = """
+        CREATE TABLE usage_history (id INTEGER PRIMARY KEY, provider TEXT, email TEXT, recorded_at INTEGER,
+            limit_id TEXT, label TEXT, window_label TEXT, used_fraction REAL, resets_at INTEGER);
+        INSERT INTO usage_history VALUES
+            (1, 'google-antigravity', 'test@example.invalid', 1, 'pool:google:weekly', 'Google', 'weekly', 0.25, NULL),
+            (2, 'google-antigravity', 'test@example.invalid', 1, 'pool:google:session', 'Google', '5h', NULL, NULL);
+        """
+        XCTAssertEqual(sqlite3_exec(database, sql, nil, nil, nil), SQLITE_OK)
+        sqlite3_close(database)
+
+        let windows = AntigravityProvider.ompUsageWindows(forEmail: "test@example.invalid", at: url)
+        XCTAssertEqual(windows.map(\.id), ["gemini-weekly"])
+        XCTAssertEqual(windows.first?.usedFraction, 0.25)
+        XCTAssertTrue(AntigravityProvider.ompUsageWindows(forEmail: "other@example.invalid", at: url).isEmpty)
+    }
+
+    func testOldCLIIsNeverAskedToRunUsageAsAPrompt() async throws {
+        let files = FileManager.default
+        let home = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try files.createDirectory(at: home, withIntermediateDirectories: false)
+        defer { try? files.removeItem(at: home) }
+        let executable = home.appendingPathComponent("agy")
+        let script = #"""
+        #!/bin/sh
+        if [ "$1" = "--version" ]; then
+          printf '1.1.10\n'
+        else
+          touch "$HOME/usage-was-invoked"
+        fi
+        """#
+        try Data(script.utf8).write(to: executable)
+        try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+
+        do {
+            _ = try await AntigravityCLI.quota(binary: executable.path, home: home)
+            XCTFail("An old CLI must fail the version check")
+        } catch UsageProviderError.apiError {
+            XCTAssertFalse(files.fileExists(atPath: home.appendingPathComponent("usage-was-invoked").path))
+        }
+    }
+
     func testItReadsBucketsIntoWindows() {
         let body = Data("""
         {"quotaGroups":[{"displayName":"Gemini","buckets":[
@@ -1096,6 +1167,26 @@ final class AntigravityActivityMonitorTests: XCTestCase {
         XCTAssertEqual(sessions.first?.detail, "Question")
     }
 
+    func testAnAnsweredQuestionDoesNotOutliveTheCompletedTurn() throws {
+        let now = Date()
+        try transcript("answered", modified: now, content: """
+        {"type":"USER_INPUT"}
+        {"type":"PLANNER_RESPONSE","tool_calls":[{"name":"ask_question"}]}
+        {"type":"PLANNER_RESPONSE","tool_calls":[]}
+        """)
+        let sessions = AntigravityActivityMonitor.read(root: root, staleAfter: 45, now: now)
+        XCTAssertEqual(sessions.map(\.state), [.success])
+    }
+
+    func testConcurrentTurnsAppearTogether() throws {
+        let now = Date()
+        try transcript("first", modified: now.addingTimeInterval(-2))
+        try transcript("second", modified: now.addingTimeInterval(-1))
+        let sessions = AntigravityActivityMonitor.read(root: root, staleAfter: 45, now: now)
+        XCTAssertEqual(sessions.map(\.id), ["antigravity.second", "antigravity.first"])
+        XCTAssertEqual(sessions.map(\.state), [.busy, .busy])
+    }
+
     func testNoTranscriptsIsQuietRatherThanAnError() {
         let absent = root.appendingPathComponent("nowhere")
         XCTAssertTrue(AntigravityActivityMonitor.read(root: absent, staleAfter: 45).isEmpty)
@@ -1700,6 +1791,19 @@ final class AntigravitySourceOrderTests: XCTestCase {
     override func tearDown() {
         GoogleStub.reset()
         super.tearDown()
+    }
+
+    func testSelectedCLIUsesItsOwnAccountAndWinsOverTheLegacyBridge() async throws {
+        let window = LimitWindow(id: "gemini-weekly", label: "Weekly", usedFraction: 0.6)
+        let provider = AntigravityProvider(session: GoogleStub.session(),
+                                           localQuota: { XCTFail("Legacy bridge was used"); return nil },
+                                           cliEnabled: { true }, cliQuota: { [window] })
+        let snapshot = try await provider.fetchSnapshot()
+        XCTAssertEqual(snapshot.windows, [window])
+        XCTAssertEqual(snapshot.fidelity, .official)
+        XCTAssertEqual(provider.account()?.source, "Antigravity CLI")
+        XCTAssertNil(provider.account()?.label)
+        XCTAssertEqual(GoogleStub.requestCount, 0)
     }
 
     /// The whole point: a language server that answers ends the fetch before

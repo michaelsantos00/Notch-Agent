@@ -81,6 +81,7 @@ enum BrowserCookies {
     struct Session: Equatable, Sendable {
         let store: Store
         let expires: Date?
+        let name: String
     }
 
     enum ReadError: Error, Equatable {
@@ -133,16 +134,16 @@ enum BrowserCookies {
                 guard let data = try? Data(contentsOf: store.file) else { return nil }
                 return safariCookies(in: data)
                     .first { matches($0.host, host) && $0.name == name }
-                    .map { Session(store: store, expires: $0.expires) }
+                    .map { Session(store: store, expires: $0.expires, name: name) }
             case .chromium:
                 let rows = query(store.file, "SELECT host_key, expires_utc FROM cookies WHERE name = ?1", bind: name)
                 return rows.first { matches($0[0], host) }.map {
-                    Session(store: store, expires: Int64($0[1]).flatMap(chromiumDate))
+                    Session(store: store, expires: Int64($0[1]).flatMap(chromiumDate), name: name)
                 }
             case .firefox:
                 let rows = query(store.file, "SELECT host, expiry FROM moz_cookies WHERE name = ?1", bind: name)
                 return rows.first { matches($0[0], host) }.map {
-                    Session(store: store, expires: Int64($0[1]).map(firefoxDate))
+                    Session(store: store, expires: Int64($0[1]).map(firefoxDate), name: name)
                 }
             }
         }

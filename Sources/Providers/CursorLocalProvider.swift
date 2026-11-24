@@ -16,6 +16,7 @@ actor CursorLocalProvider: UsageProvider {
     nonisolated let glyph = ProviderGlyph.cursor
 
     private let endpoint = URL(string: "https://cursor.com/api/usage-summary")!
+    private let sharedUsageEndpoint = URL(string: "https://cursor.com/api/dashboard/get-sand-usage-status")!
     private let session: URLSession
 
     init(session: URLSession? = nil) {
@@ -40,8 +41,10 @@ actor CursorLocalProvider: UsageProvider {
         // Re-read every time: the editor rotates this, and holding a stale copy
         // would mean signing ourselves out for no reason. The agent token is
         // cached inside `CursorAgentKeychain` so the keychain is not.
-        let credentials = try CursorCredentials.load()
+        try await fetchSnapshot(using: CursorCredentials.load())
+    }
 
+    func fetchSnapshot(using credentials: CursorCredentials) async throws -> ProviderSnapshot {
         var request = URLRequest(url: endpoint)
         request.setValue(credentials.sessionCookie, forHTTPHeaderField: "Cookie")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -64,6 +67,18 @@ actor CursorLocalProvider: UsageProvider {
         }
 
         let body = String(data: data, encoding: .utf8) ?? ""
+        let plan = CursorUsage.plan(fromJSON: body) ?? account()?.plan?.nonEmptyPlan
+        let shared = await sharedWeeklyUsage(using: credentials)
+        try Task.checkCancellation()
+        if let shared {
+            guard let window = shared.window else {
+                throw UsageProviderError.apiError(L10n.t("Cursor did not report a shared weekly limit."))
+            }
+            return ProviderSnapshot(id: id, displayName: displayName, glyph: glyph,
+                                    fidelity: .official, status: .ok, windows: [window],
+                                    headlineID: CursorUsage.weeklyID, weeklyID: CursorUsage.weeklyID,
+                                    plan: shared.plan ?? plan)
+        }
 
         let windows = try CursorUsage.windows(fromJSON: body)
         return ProviderSnapshot(
@@ -74,7 +89,23 @@ actor CursorLocalProvider: UsageProvider {
             status: .ok,
             windows: windows,
             headlineID: CursorUsage.headlineID(in: windows),
-            plan: CursorUsage.plan(fromJSON: body) ?? account()?.plan?.nonEmptyPlan
+            plan: plan
         )
+    }
+
+    private func sharedWeeklyUsage(using credentials: CursorCredentials) async -> (window: LimitWindow?, plan: String?)? {
+        var request = URLRequest(url: sharedUsageEndpoint)
+        request.httpMethod = "POST"
+        request.httpBody = Data("{}".utf8)
+        request.timeoutInterval = 5
+        request.setValue(credentials.sessionCookie, forHTTPHeaderField: "Cookie")
+        request.setValue("https://cursor.com", forHTTPHeaderField: "Origin")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        guard (try? NetworkPolicy.validate(request: request, for: .cursor)) != nil,
+              let (data, response) = try? await session.data(for: request, delegate: NetworkPolicy.taskDelegate(for: .cursor)),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return CursorUsage.sharedWeeklyUsage(in: data)
     }
 }

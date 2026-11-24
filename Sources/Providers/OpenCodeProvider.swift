@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import os
 
 /// Reads OpenCode Go plan usage from the official endpoint, with the
@@ -27,15 +28,19 @@ actor OpenCodeProvider: UsageProvider {
 
     private let session: URLSession
     private let archive: UsageArchive
+    private let credentials: @Sendable () -> [OpenCodeCredentials.Credential]
     /// Set when the endpoint returns 429. Until it passes, refreshes are
     /// skipped without touching the network — the same bargain Claude's and
     /// GLM's make.
     private var retryNoEarlierThan: Date?
     private var consecutiveRateLimits = 0
+    private var preferredCredential: SHA256.Digest?
 
-    init(session: URLSession = NetworkPolicy.makeSession(for: .opencode), archive: UsageArchive = UsageArchive()) {
+    init(session: URLSession = NetworkPolicy.makeSession(for: .opencode), archive: UsageArchive = UsageArchive(),
+         credentials: @escaping @Sendable () -> [OpenCodeCredentials.Credential] = { OpenCodeCredentials.candidates() }) {
         self.session = session
         self.archive = archive
+        self.credentials = credentials
         self.retryNoEarlierThan = archive.loadBackoffUntil(providerID: id)
     }
 
@@ -67,16 +72,17 @@ actor OpenCodeProvider: UsageProvider {
 
         // Re-read on every fetch. This is an ordinary file, not a keychain
         // item: reading it puts no prompt in front of anyone.
-        guard let credential = OpenCodeCredentials.load() else {
+        var candidates = credentials()
+        guard !candidates.isEmpty else {
             throw UsageProviderError.needsAuth
+        }
+        if let index = candidates.firstIndex(where: { Self.fingerprint($0) == preferredCredential }) {
+            let preferred = candidates.remove(at: index)
+            candidates.insert(preferred, at: 0)
         }
 
         do {
-            let data = try await fetch(credential)
-            guard let text = String(data: data, encoding: .utf8) else {
-                throw UsageProviderError.badResponse(status: 0)
-            }
-            let read = try OpenCodeUsage.windows(fromJSON: text)
+            let read = try await loadWindows(candidates)
 
             consecutiveRateLimits = 0
             retryNoEarlierThan = nil
@@ -102,6 +108,36 @@ actor OpenCodeProvider: UsageProvider {
             Log.usage.notice("opencode: rate limited (\(self.consecutiveRateLimits)x), next attempt in \(retryAfter, format: .fixed(precision: 0))s")
             throw UsageProviderError.rateLimited(retryAfter: retryAfter)
         }
+    }
+
+    private func loadWindows(_ candidates: [OpenCodeCredentials.Credential]) async throws -> [LimitWindow] {
+        var planless: UsageProviderError?
+        var expired = false
+        for credential in candidates {
+            try Task.checkCancellation()
+            do {
+                let data = try await fetch(credential)
+                guard let text = String(data: data, encoding: .utf8) else {
+                    throw UsageProviderError.badResponse(status: 0)
+                }
+                let windows = try OpenCodeUsage.windows(fromJSON: text)
+                preferredCredential = Self.fingerprint(credential)
+                return windows
+            } catch UsageProviderError.needsAuth {
+                continue
+            } catch UsageProviderError.credentialExpired {
+                expired = true
+            } catch UsageProviderError.nothingMetered(let message) where !credential.oauth {
+                planless = .nothingMetered(message)
+            }
+        }
+        preferredCredential = nil
+        if expired { throw UsageProviderError.credentialExpired }
+        throw planless ?? UsageProviderError.needsAuth
+    }
+
+    private static func fingerprint(_ credential: OpenCodeCredentials.Credential) -> SHA256.Digest {
+        SHA256.hash(data: Data("\(credential.oauth)\u{0}\(credential.org ?? "")\u{0}\(credential.token)".utf8))
     }
 
     /// The route this credential is for. Not a preference: each refuses the
