@@ -1,9 +1,7 @@
 import XCTest
 @testable import NotchAgent
 
-/// Pinned to a response recorded from a live SuperGrok CLI session. Credits
-/// is the weekly Grok Build allowance — the one number this account's own
-/// endpoint actually states.
+/// Pinned to a response recorded from a live SuperGrok CLI session.
 final class GrokUsageTests: XCTestCase {
     private let credits = """
     {"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY",\
@@ -18,19 +16,18 @@ final class GrokUsageTests: XCTestCase {
     "billingPeriodEnd":"2026-09-12T08:21:18.802818+00:00"}}
     """
 
-    private func windows() throws -> [LimitWindow] {
-        try GrokUsage.windows(creditsJSON: credits)
-    }
-
     func testTheRingIsTheCreditsPercentage() throws {
-        let credits = try XCTUnwrap(windows().first { $0.id == "credits" })
+        let reading = try GrokUsage.reading(creditsJSON: credits)
+        let credits = reading.window
+        XCTAssertTrue(reading.isWeekly)
+        XCTAssertEqual(credits.id, "credits")
         XCTAssertEqual(credits.duration, 7 * 86400)
-        XCTAssertEqual(credits.label, "Grok Build")
+        XCTAssertEqual(credits.label, "Weekly limit")
         XCTAssertEqual(credits.usedFraction ?? -1, 0.08, accuracy: 0.0001)
     }
 
     func testWeeklyCreditsHaveTheirOwnReset() throws {
-        let credits = try XCTUnwrap(windows().first { $0.id == "credits" })
+        let credits = try GrokUsage.reading(creditsJSON: credits).window
         let reset = try XCTUnwrap(credits.resetsAt)
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC")!
@@ -41,7 +38,7 @@ final class GrokUsageTests: XCTestCase {
     /// An empty config has nothing to draw a ring from — not a reading of
     /// zero, an absence of one.
     func testAnEmptyConfigIsNotASuccessfulReading() {
-        XCTAssertThrowsError(try GrokUsage.windows(
+        XCTAssertThrowsError(try GrokUsage.reading(
             creditsJSON: #"{"config":{}}"#
         )) { error in
             guard case UsageProviderError.nothingMetered = error else {
@@ -50,33 +47,19 @@ final class GrokUsageTests: XCTestCase {
         }
     }
 
-    /// `creditUsagePercent` is absent; the product array is the reading. The
-    /// ring is still declared as both the headline and weekly allowance.
-    func testProductOnlyCreditsStillUseTheHeadlineID() throws {
+    func testAProductShareDoesNotStandInForTheSharedQuota() {
         let productOnly = """
         {"config":{"productUsage":[{"product":"GrokBuild","usagePercent":33.0}],\
         "billingPeriodEnd":"2026-09-12T08:21:18.802818+00:00"}}
         """
-        let w = try GrokUsage.windows(creditsJSON: productOnly)
-        let credits = try XCTUnwrap(w.first { $0.id == "credits" })
-        XCTAssertNil(credits.duration)
-        XCTAssertEqual(credits.label, "Grok Build")
-        XCTAssertEqual(credits.usedFraction ?? -1, 0.33, accuracy: 0.0001)
-        let snap = ProviderSnapshot(
-            id: "grok", displayName: "Grok", glyph: .grok,
-            fidelity: .official, status: .ok, windows: w,
-            headlineID: "credits", weeklyID: "credits"
-        )
-        XCTAssertEqual(snap.headline?.id, "credits")
-        XCTAssertEqual(snap.weeklyLimitWindow?.id, "credits")
-        XCTAssertEqual(snap.usedFraction ?? -1, 0.33, accuracy: 0.0001)
+        XCTAssertThrowsError(try GrokUsage.reading(creditsJSON: productOnly)) { error in
+            guard case UsageProviderError.apiError = error else {
+                return XCTFail("Expected unavailable shared usage, got \(error)")
+            }
+        }
     }
 
-    /// An X Premium+ / SuperGrok weekly pool states its window in
-    /// `currentPeriod` but carries no `creditUsagePercent` or `productUsage`
-    /// until usage lands. Grok's own `/usage` draws a "Weekly limit" bar at 0%
-    /// here, so this is a zero reading, not an absent one.
-    func testWeeklyPoolWithoutAPercentIsAZeroRing() throws {
+    func testWeeklyPoolRequiresAnExplicitPercentage() throws {
         let weeklyOnly = """
         {"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY",\
         "start":"2026-09-07T20:59:12+00:00",\
@@ -84,8 +67,14 @@ final class GrokUsageTests: XCTestCase {
         "onDemandCap":{"val":0},"onDemandUsed":{"val":0},\
         "isUnifiedBillingUser":true,"prepaidBalance":{"val":0}}}
         """
-        let w = try GrokUsage.windows(creditsJSON: weeklyOnly)
-        let credits = try XCTUnwrap(w.first { $0.id == "credits" })
+        XCTAssertThrowsError(try GrokUsage.reading(creditsJSON: weeklyOnly)) { error in
+            guard case UsageProviderError.apiError = error else {
+                return XCTFail("Expected unavailable shared usage, got \(error)")
+            }
+        }
+        let reportedZero = weeklyOnly.replacingOccurrences(of: "\"onDemandCap\"",
+                                                            with: "\"creditUsagePercent\":0,\"onDemandCap\"")
+        let credits = try GrokUsage.reading(creditsJSON: reportedZero).window
         XCTAssertEqual(credits.label, "Weekly limit")
         XCTAssertEqual(credits.usedFraction ?? -1, 0, accuracy: 0.0001)
         let reset = try XCTUnwrap(credits.resetsAt)
@@ -96,15 +85,18 @@ final class GrokUsageTests: XCTestCase {
     }
 
     func testGarbageIsABadResponseRatherThanAGuess() {
-        XCTAssertThrowsError(try GrokUsage.windows(creditsJSON: "not json")) { error in
+        XCTAssertThrowsError(try GrokUsage.reading(creditsJSON: "not json")) { error in
             guard case UsageProviderError.badResponse = error else {
                 return XCTFail("expected badResponse, got \(error)")
             }
         }
     }
 
-    func testHumanizesTheProductNameTheWayTheModalWritesIt() {
-        XCTAssertEqual(GrokUsage.humanize("GrokBuild"), "Grok Build")
+    func testMonthlyCreditsKeepTheirMonthlyLabel() throws {
+        let monthly = credits.replacingOccurrences(of: "USAGE_PERIOD_TYPE_WEEKLY", with: "USAGE_PERIOD_TYPE_MONTHLY")
+        let reading = try GrokUsage.reading(creditsJSON: monthly)
+        XCTAssertEqual(reading.window.label, "Monthly limit")
+        XCTAssertFalse(reading.isWeekly)
     }
 
     /// The issuer is compared whole: a host that merely begins with

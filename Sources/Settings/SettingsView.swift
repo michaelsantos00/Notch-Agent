@@ -1990,7 +1990,7 @@ private struct AccountRow: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 6) {
             accountDetail
-            if isConnected, [AntigravityProfile.defaultID, "gemini-api", "ollama", "minimax", "apify"].contains(provider.id) {
+            if isConnected, [AntigravityProfile.defaultID, "cursor", "gemini-api", "ollama", "minimax", "apify"].contains(provider.id) {
                 DisclosureGroup(L10n.t("Provider options")) {
                     providerOptions
                 }
@@ -2003,9 +2003,15 @@ private struct AccountRow: View {
     @ViewBuilder
     private var providerOptions: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if isConnected, provider.id == "cursor" { cursorHookOptions }
             // Antigravity limit dropdown
             if isConnected, provider.id == AntigravityProfile.defaultID {
                 VStack(alignment: .leading, spacing: 8) {
+                    Toggle(L10n.t("Read usage from Antigravity CLI"), isOn: $preferences.antigravityUseCLI)
+                    Text(L10n.t("Uses the account signed in to agy. NotchAgent runs Google’s CLI to refresh its quota."))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     HStack(spacing: 8) {
                         Text(L10n.t("Main ring limit"))
                             .foregroundStyle(.secondary)
@@ -2127,11 +2133,31 @@ private struct AccountRow: View {
         .padding(.top, 2)
     }
 
-    /// Where Ollama's usage is read from, and for a browser, which one.
-    ///
-    /// The list holds only the profiles actually signed in to ollama.com, found
-    /// from the cookie files' metadata — never the keychain, so filling it
-    /// raises no dialogue. Only the browser in use is ever asked for its key.
+    @State private var cursorHookInstalled = false
+    @State private var cursorHookError: String?
+
+    private var cursorHookOptions: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(cursorHookInstalled ? L10n.t("Remove Cursor CLI activity hooks")
+                                      : L10n.t("Install Cursor CLI activity hooks")) {
+                let hooks = CursorActivityHooks()
+                do {
+                    try hooks.setInstalled(!cursorHookInstalled)
+                    cursorHookError = nil
+                } catch {
+                    cursorHookError = error.localizedDescription
+                }
+                cursorHookInstalled = hooks.isInstalled
+            }
+            Text(L10n.t("Show running and finished Cursor CLI turns. Hook events stay on this Mac."))
+                .foregroundStyle(.tertiary)
+            if let cursorHookError { Text(cursorHookError).foregroundStyle(.orange) }
+        }
+        .onAppear { cursorHookInstalled = CursorActivityHooks().isInstalled }
+    }
+
+    /// Signed-in profiles come from cookie metadata. Only the selected browser
+    /// is asked for its key when reading usage.
     @State private var ollamaSessions: [BrowserCookies.Session] = []
     @State private var ollamaSafariNeedsAccess = false
     @State private var ollamaScanning = false
@@ -2151,8 +2177,8 @@ private struct AccountRow: View {
                 .pickerStyle(.segmented)
                 .frame(width: 260)
                 Text(preferences.ollamaUsageSource == .browser
-                     ? L10n.t("Session (5-hour) and weekly limits as a percentage, from ollama.com.")
-                     : L10n.t("Request counts: today, 7 days and 30 days. Ollama's API no longer reports limits."))
+                     ? L10n.t("Cloud limits and credits from ollama.com.")
+                     : L10n.t("Cloud limits and credits from Ollama’s API, with request counts when balances are unavailable."))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -2231,8 +2257,7 @@ private struct AccountRow: View {
         Task {
             let home = URL(fileURLWithPath: NSHomeDirectory())
             let (sessions, safari) = await Task.detached {
-                (BrowserCookies.sessions(named: OllamaWebUsage.sessionCookie, host: OllamaWebUsage.host, home: home)
-                    .filter { ($0.expires ?? .distantFuture) > Date() },
+                (OllamaWebUsage.sessions(home: home),
                  BrowserCookies.safariNeedsFullDiskAccess(home: home))
             }.value
             ollamaSessions = sessions

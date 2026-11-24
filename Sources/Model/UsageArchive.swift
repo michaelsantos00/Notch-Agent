@@ -99,7 +99,8 @@ struct UsageArchive {
                 status: .stale(since: entry.fetchedAt),
                 windows: windows,
                 headlineID: entry.headlineID,
-                weeklyID: entry.weeklyID,
+                weeklyID: CodexProfile.isCodex(providerID: entry.id)
+                    ? CodexUsage.weeklyID(in: windows) : entry.weeklyID,
                 tokenUsage: entry.tokenUsage,
                 usageDetail: entry.usageDetail
             )

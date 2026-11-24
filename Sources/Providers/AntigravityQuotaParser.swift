@@ -26,6 +26,7 @@ enum AntigravityQuotaParser {
     }
 
     private struct Bucket: Decodable {
+        let id: String?
         let modelId: String?
         let bucketId: String?
         let name: String?
@@ -42,8 +43,11 @@ enum AntigravityQuotaParser {
     }
 
     private struct Group: Decodable {
+        let name: String?
         let displayName: String?
         let buckets: [Bucket]?
+
+        var title: String? { displayName ?? name }
     }
 
     private struct GroupBody: Decodable {
@@ -58,6 +62,17 @@ enum AntigravityQuotaParser {
         let summary: GroupBody?
     }
 
+    private struct CLIReport: Decodable {
+        struct Command: Decodable {
+            let name: String
+            let data: GroupBody
+        }
+
+        let status: String
+        let numTurns: Int
+        let command: Command
+    }
+
     private struct Candidate {
         let remaining: Double
         let resetDate: Date?
@@ -65,6 +80,8 @@ enum AntigravityQuotaParser {
     }
 
     static func parse(_ data: Data, now: Date) -> [LimitWindow] {
+        let cliWindows = parseCLI(data)
+        if !cliWindows.isEmpty { return cliWindows }
         guard let response = try? JSONDecoder().decode(Response.self, from: data) else { return [] }
         let groups = response.response?.groups
             ?? response.summary?.groups
@@ -79,10 +96,19 @@ enum AntigravityQuotaParser {
         return self.modelWindows(buckets, now: now)
     }
 
+    static func parseCLI(_ data: Data) -> [LimitWindow] {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let report = try? decoder.decode(CLIReport.self, from: data),
+              report.status == "SUCCESS", report.numTurns == 0, report.command.name == "usage"
+        else { return [] }
+        return groupedWindows(report.command.data.groups ?? [])
+    }
+
     private static func groupedWindows(_ groups: [Group]) -> [LimitWindow] {
         let sortedGroups = groups.enumerated().sorted { lhs, rhs in
-            let lhsRank = self.groupRank(lhs.element.displayName)
-            let rhsRank = self.groupRank(rhs.element.displayName)
+            let lhsRank = self.groupRank(lhs.element.title)
+            let rhsRank = self.groupRank(rhs.element.title)
             return lhsRank == rhsRank ? lhs.offset < rhs.offset : lhsRank < rhsRank
         }
         var windows: [LimitWindow] = []
@@ -101,7 +127,7 @@ enum AntigravityQuotaParser {
         return sortedBuckets.compactMap { indexedBucket in
             let bucket = indexedBucket.element
             guard bucket.disabled != true else { return nil }
-            let groupName = group.displayName
+            let groupName = group.title
             let rawID = self.id(for: bucket, group: groupName)
             let reset = bucket.resetTime.flatMap(AntigravityCredentials.parse)
             if let remaining = bucket.fraction, (0...1).contains(remaining) {
@@ -223,10 +249,10 @@ enum AntigravityQuotaParser {
 
     private static func cadence(_ bucket: Bucket) -> Int {
         if let value = self.cadenceValue(bucket.window), self.isWeeklyValue(value) { return 1 }
-        if let value = self.cadenceValue(bucket.bucketId), self.isWeeklyValue(value) { return 1 }
+        if let value = self.cadenceValue(bucket.bucketId ?? bucket.id), self.isWeeklyValue(value) { return 1 }
         if let value = self.cadenceValue(bucket.displayName), self.isWeeklyValue(value) { return 1 }
         if let value = self.cadenceValue(bucket.window), self.isSessionValue(value) { return 0 }
-        if let value = self.cadenceValue(bucket.bucketId), self.isSessionValue(value) { return 0 }
+        if let value = self.cadenceValue(bucket.bucketId ?? bucket.id), self.isSessionValue(value) { return 0 }
         if let value = self.cadenceValue(bucket.displayName), self.isSessionValue(value) { return 0 }
         return 2
     }
@@ -259,7 +285,7 @@ enum AntigravityQuotaParser {
     }
 
     private static func label(for bucket: Bucket, fallback: String) -> String {
-        var value = bucket.displayName ?? fallback
+        var value = bucket.displayName ?? (bucket.id == nil ? nil : bucket.name) ?? fallback
         if value.hasSuffix(" Remaining") {
             value = String(value.dropLast(" Remaining".count))
         }
@@ -267,7 +293,7 @@ enum AntigravityQuotaParser {
     }
 
     private static func id(for bucket: Bucket, group: String?) -> String {
-        [bucket.bucketId, bucket.modelId, bucket.name, group]
+        [bucket.bucketId, bucket.id, bucket.modelId, bucket.name, group]
             .compactMap { value in
                 guard let value else { return nil }
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)

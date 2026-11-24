@@ -24,6 +24,38 @@ final class CursorUsageTests: XCTestCase {
         try CursorUsage.windows(fromJSON: json)
     }
 
+    func testTheXSubscriptionUsesTheCurrentSharedWeeklyPool() async throws {
+        let session = CursorQuotaEndpoint.session()
+        defer { session.invalidateAndCancel() }
+        let provider = CursorLocalProvider(session: session)
+        let snapshot = try await provider.fetchSnapshot(using: CursorCredentials(accountID: "shared", accessToken: "fixture"))
+        XCTAssertEqual(snapshot.windows.map(\.id), ["weekly"])
+        XCTAssertEqual(snapshot.headlineID, "weekly")
+        XCTAssertEqual(snapshot.weeklyID, "weekly")
+        XCTAssertEqual(snapshot.headline?.usedFraction ?? -1, 0.24, accuracy: 0.0001)
+        XCTAssertEqual(snapshot.headline?.duration, 7 * 86400)
+        XCTAssertEqual(snapshot.plan, "Premium")
+    }
+
+    func testALegacyPlanKeepsItsMonthlyPool() async throws {
+        let session = CursorQuotaEndpoint.session()
+        defer { session.invalidateAndCancel() }
+        let provider = CursorLocalProvider(session: session)
+        let snapshot = try await provider.fetchSnapshot(using: CursorCredentials(accountID: "legacy", accessToken: "fixture"))
+        XCTAssertEqual(snapshot.windows.map(\.id), ["auto"])
+        XCTAssertEqual(snapshot.headline?.usedFraction ?? -1, 0.85, accuracy: 0.0001)
+        XCTAssertNil(snapshot.weeklyID)
+        XCTAssertEqual(snapshot.plan, "pro")
+    }
+
+    func testExpiredOrUnmeasuredSharedQuotaStillIdentifiesASharedPlan() throws {
+        let now = Date(timeIntervalSince1970: 1_810_000_000)
+        let expired = Data(#"{"isUnified":true,"usagePercent":25,"nextResetTimestampUtc":"2026-10-22T10:27:36.178Z"}"#.utf8)
+        XCTAssertNil(try XCTUnwrap(CursorUsage.sharedWeeklyUsage(in: expired, now: now)).window)
+        let missing = Data(#"{"isUnified":true,"nextResetTimestampUtc":"2030-11-30T11:05:35Z"}"#.utf8)
+        XCTAssertNil(try XCTUnwrap(CursorUsage.sharedWeeklyUsage(in: missing, now: now)).window)
+    }
+
     func testReadsTheAutoBar() throws {
         let w = try windows(recorded)
         XCTAssertEqual(w[0].id, "auto")
@@ -124,6 +156,49 @@ final class CursorUsageTests: XCTestCase {
         )
         XCTAssertEqual(snap.headlineText, "20%")
     }
+}
+
+private final class CursorQuotaEndpoint: URLProtocol {
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        XCTAssertEqual(url.host, "cursor.com")
+        let cookie = request.value(forHTTPHeaderField: "Cookie")
+        XCTAssertTrue(cookie == "WorkosCursorSessionToken=shared::fixture" || cookie == "WorkosCursorSessionToken=legacy::fixture")
+        let json: String
+        switch url.path {
+        case "/api/usage-summary":
+            XCTAssertEqual(request.httpMethod, "GET")
+            json = #"{"membershipType":"pro","individualUsage":{"plan":{"autoPercentUsed":85}}}"#
+        case "/api/dashboard/get-sand-usage-status":
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Origin"), "https://cursor.com")
+            let unified = cookie == "WorkosCursorSessionToken=shared::fixture"
+            let reset = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))
+            json = """
+                {"isUnified":\(unified),"usagePercent":24,"cursorPlanName":"Premium",
+                 "hasNonZeroIncludedLimit":true,"nextResetTimestampUtc":"\(reset)"}
+                """
+        default:
+            XCTFail("Unexpected Cursor endpoint")
+            client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
+            return
+        }
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(json.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 /// Borrowing the editor's session is what stops the notch reporting a different

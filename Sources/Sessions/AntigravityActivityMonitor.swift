@@ -22,6 +22,13 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
     /// Generous, because a model can think for a while between two lines.
     private let staleAfter: TimeInterval
     private var timer: Timer?
+    private var transcripts: [URL: TranscriptState] = [:]
+
+    private struct TranscriptState {
+        let modified: Date
+        let state: AgentSession.State
+        let waitingFor: String?
+    }
 
     init(roots: [URL] = AntigravityActivity.transcriptRoots,
          interval: TimeInterval = 2,
@@ -51,55 +58,58 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
     func stop() {
         timer?.invalidate()
         timer = nil
+        transcripts.removeAll()
+        sessions = []
     }
 
     private func poll() {
-        let found = Self.read(roots: roots, staleAfter: staleAfter)
+        let found = Self.read(roots: roots, staleAfter: staleAfter, now: Date(), cache: &transcripts)
         guard found != sessions else { return }
         sessions = found
     }
 
-    /// The most recent turn across every install — the same reasoning as
-    /// `AntigravityActivity.transcriptRoots`. Watching one directory meant the
-    /// ring never span for anyone whose Antigravity wrote to another.
     static func read(roots: [URL], staleAfter: TimeInterval, now: Date = Date()) -> [AgentSession] {
-        roots
-            .flatMap { read(root: $0, staleAfter: staleAfter, now: now) }
-            .max { $0.since < $1.since }
-            .map { [$0] } ?? []
+        var cache: [URL: TranscriptState] = [:]
+        return read(roots: roots, staleAfter: staleAfter, now: now, cache: &cache)
     }
 
     static func read(root: URL, staleAfter: TimeInterval, now: Date = Date()) -> [AgentSession] {
-        let manager = FileManager.default
-        guard let trajectories = try? manager.contentsOfDirectory(
-            at: root, includingPropertiesForKeys: nil
-        ) else { return [] }
+        read(roots: [root], staleAfter: staleAfter, now: now)
+    }
 
-        var newest: (url: URL, modified: Date)?
-        for trajectory in trajectories {
-            // String path, not `appendingPathComponent`: that constructor
-            // touches the filesystem per call, which is one syscall too many
-            // in a loop over every conversation ever written, on every tick.
-            // The same goes for `attributesOfItem`, which pulls every
-            // extended attribute along with the date — `stat` is the one
-            // syscall that answers this.
-            let transcriptPath = trajectory.path
-                + "/.system_generated/logs/transcript.jsonl"
-            var info = stat()
-            guard stat(transcriptPath, &info) == 0 else { continue }
-            let modified = Date(timeIntervalSince1970:
-                TimeInterval(info.st_mtimespec.tv_sec)
-                + TimeInterval(info.st_mtimespec.tv_nsec) / 1_000_000_000)
-            if newest == nil || modified > newest!.modified {
-                newest = (URL(fileURLWithPath: transcriptPath), modified)
+    private static func read(roots: [URL], staleAfter: TimeInterval, now: Date,
+                             cache: inout [URL: TranscriptState]) -> [AgentSession] {
+        var newestByID: [String: (url: URL, modified: Date)] = [:]
+        for root in roots {
+            let trajectories = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+            for trajectory in trajectories {
+                let path = trajectory.path + "/.system_generated/logs/transcript.jsonl"
+                var info = stat()
+                guard stat(path, &info) == 0 else { continue }
+                let modified = Date(timeIntervalSince1970: TimeInterval(info.st_mtimespec.tv_sec)
+                    + TimeInterval(info.st_mtimespec.tv_nsec) / 1_000_000_000)
+                let id = trajectory.lastPathComponent
+                // Backup directories can contain a copy of the same turn.
+                if let previous = newestByID[id], previous.modified >= modified { continue }
+                newestByID[id] = (URL(fileURLWithPath: path), modified)
             }
         }
 
-        guard let newest, let session = session(trajectory: newest.url,
-                                                modified: newest.modified,
-                                                staleAfter: staleAfter, now: now)
-        else { return [] }
-        return [session]
+        let current = Set(newestByID.values.map(\.url))
+        cache = cache.filter { current.contains($0.key) }
+        return newestByID.compactMap { id, reading in
+            let state: TranscriptState
+            if let cached = cache[reading.url], cached.modified == reading.modified {
+                state = cached
+            } else {
+                guard let data = tail(of: reading.url) else { return nil }
+                let parsed = parseState(inTail: data)
+                state = TranscriptState(modified: reading.modified, state: parsed.state,
+                                        waitingFor: parsed.waitingFor)
+                cache[reading.url] = state
+            }
+            return session(id: id, transcript: reading.url, reading: state, staleAfter: staleAfter, now: now)
+        }.sorted { $0.since == $1.since ? $0.id < $1.id : $0.since > $1.since }
     }
 
     static func tail(of url: URL, bytes: Int = 64 * 1024) -> Data? {
@@ -114,18 +124,12 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
     static func parseState(inTail data: Data) -> (state: AgentSession.State, waitingFor: String?) {
         let lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: true)
         
-        var isTurnOver = false
-        
         for line in lines.reversed() {
             guard let json = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any],
                   let type = json["type"] as? String else { continue }
             
             if type == "USER_INPUT" {
-                if isTurnOver {
-                    return (.idle, nil)
-                } else {
-                    return (.busy, nil)
-                }
+                return (.busy, nil)
             } else if type == "PLANNER_RESPONSE" {
                 if let toolCalls = json["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty {
                     for call in toolCalls {
@@ -141,18 +145,14 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
                             }
                         }
                     }
-                    if !isTurnOver {
-                        return (.busy, nil)
-                    }
+                    return (.busy, nil)
                 } else {
-                    isTurnOver = true
+                    return (.idle, nil)
                 }
             } else if type == "EPHEMERAL_MESSAGE" || type == "CONVERSATION_HISTORY" || type == "KNOWLEDGE_ARTIFACTS" || type == "CHECKPOINT" {
                 continue
             } else {
-                if !isTurnOver {
-                    return (.busy, nil) // A tool response
-                }
+                return (.busy, nil) // A tool response
             }
         }
         
@@ -162,14 +162,16 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
     /// Only a transcript written within the window counts. An older one is a
     /// finished turn, and showing it as work in progress would be a guess
     /// dressed as a fact.
-    static func session(
-        trajectory: URL, modified: Date, staleAfter: TimeInterval, now: Date
+    private static func session(
+        id: String, transcript: URL, reading: TranscriptState, staleAfter: TimeInterval, now: Date
     ) -> AgentSession? {
-        var (state, waitingFor) = tail(of: trajectory).map(parseState(inTail:)) ?? (.idle, nil)
+        var state = reading.state
+        var waitingFor = reading.waitingFor
         
         if state == .busy {
-            let conversationID = trajectory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().lastPathComponent
-            let dbURL = trajectory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("conversations/" + conversationID + ".db")
+            let root = transcript.deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            let dbURL = root.appendingPathComponent("conversations/\(id).db")
             
             if let db = SQLiteStore.open(dbURL) {
                 defer { sqlite3_close(db) }
@@ -181,7 +183,7 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
             }
         }
         
-        let age = now.timeIntervalSince(modified)
+        let age = now.timeIntervalSince(reading.modified)
         
         if state == .idle {
             if age <= 9 {
@@ -196,11 +198,6 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
         }
         // If state == .waiting, we do not expire it, it remains indefinitely.
 
-        // The trajectory's own directory names it; the file is always
-        // `transcript.jsonl`.
-        let id = trajectory.deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().lastPathComponent
-            
         let detail: String
         switch state {
         case .busy: detail = L10n.t("Working")
@@ -215,7 +212,7 @@ final class AntigravityActivityMonitor: AgentActivityMonitor {
             detail: detail,
             state: state,
             waitingFor: waitingFor,
-            since: modified
+            since: reading.modified
         )
     }
 }

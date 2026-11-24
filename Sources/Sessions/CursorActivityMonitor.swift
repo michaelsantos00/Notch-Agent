@@ -68,8 +68,11 @@ final class CursorActivityMonitor: ObservableObject, AgentActivityMonitor {
     }
 
     private func rescan() {
-        let found = Self.read(store: store, cursorLaunchedAt: Self.cursorLaunchDate(),
-                              staleAfter: staleAfter)
+        let hooks = Runtime.isUnderTest ? [] : CursorActivityHooks().sessions(staleAfter: staleAfter)
+        let ids = Set(hooks.map(\.id))
+        let editor = Self.read(store: store, cursorLaunchedAt: Self.cursorLaunchDate(), staleAfter: staleAfter)
+        let found = (hooks + editor.filter { !ids.contains($0.id) })
+            .sorted { $0.since == $1.since ? $0.id < $1.id : $0.since > $1.since }
         guard found != sessions else { return }
         sessions = found
     }

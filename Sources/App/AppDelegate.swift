@@ -665,6 +665,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .sink { [weak store] in store?.order = $0 }
                 .store(in: &cancellables)
 
+            preferences.$antigravityUseCLI
+                .removeDuplicates()
+                .dropFirst()
+                .receive(on: RunLoop.main)
+                .sink { [weak store] _ in store?.antigravitySourceChanged() }
+                .store(in: &cancellables)
+
             // Redraw the Gemini API ring against the new ceiling.
             //
             // `dropFirst` because `@Published` publishes the value it is given

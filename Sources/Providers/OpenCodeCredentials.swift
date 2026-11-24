@@ -61,12 +61,18 @@ enum OpenCodeCredentials {
     /// The three sources above, in order. `nil` means OpenCode is installed but
     /// has no sign-in we may claim.
     static func load(in directory: URL = dataDirectory) -> Credential? {
+        candidates(in: directory).first
+    }
+
+    static func candidates(in directory: URL = dataDirectory) -> [Credential] {
         let auth = directory.appendingPathComponent("auth.json")
-        if let go = loadGoKey(from: auth) { return go }
-        if let stored = loadFromDatabase(directory.appendingPathComponent("opencode.db")) {
-            return stored
+        let saved = databaseCandidates(directory.appendingPathComponent("opencode.db"))
+        let ordered = [loadGoKey(from: auth)].compactMap { $0 } + saved + [loadOAuth(from: auth)].compactMap { $0 }
+        var result: [Credential] = []
+        for credential in ordered where !result.contains(where: { $0.token == credential.token && $0.oauth == credential.oauth && $0.org == credential.org }) {
+            result.append(credential)
         }
-        return loadOAuth(from: auth)
+        return result
     }
 
     // MARK: - Sources
@@ -95,7 +101,11 @@ enum OpenCodeCredentials {
     /// that would ignore the write-ahead log and serve a token OpenCode has
     /// already rotated. `SQLiteStore` opens `mode=ro` first for that reason.
     static func loadFromDatabase(_ url: URL = databaseURL) -> Credential? {
-        guard let db = SQLiteStore.open(url) else { return nil }
+        databaseCandidates(url).first
+    }
+
+    private static func databaseCandidates(_ url: URL) -> [Credential] {
+        guard let db = SQLiteStore.open(url) else { return [] }
         defer { sqlite3_close(db) }
 
         // Newest first, so a rotated sign-in beats the one it replaced. The
@@ -113,15 +123,15 @@ enum OpenCodeCredentials {
         )
         // Go key first, then the OAuth sign-in: same order as the file sources,
         // so a machine holding both reads the same account either way.
-        for wanted in ["opencode-go", "opencode"] {
+        return ["opencode-go", "opencode"].compactMap { wanted in
             for row in rows where row[0] == wanted {
                 guard let value = try? JSONSerialization.jsonObject(with: Data(row[1].utf8)),
                       let found = credential(from: value, source: "OpenCode")
                 else { continue }
                 return found
             }
+            return nil
         }
-        return nil
     }
 
     // MARK: - Shapes

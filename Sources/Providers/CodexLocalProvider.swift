@@ -96,8 +96,7 @@ actor CodexLocalProvider: UsageProvider {
             // ring whenever primary is missing — extras are appended after the
             // main pair, but a Spark-only payload still leads with spark.
             headlineID: "primary",
-            // The weekly ring is the account weekly, never Spark's own weekly.
-            weeklyID: "secondary",
+            weeklyID: CodexUsage.weeklyID(in: windows),
             tokenUsage: profileUsage,
             plan: CodexUsage.plan(from: data) ?? account()?.plan?.nonEmptyPlan,
             resetCredits: await resetCredits
